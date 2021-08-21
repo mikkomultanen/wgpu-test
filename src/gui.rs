@@ -11,6 +11,7 @@ pub struct GUI {
     platform: Platform,
     rpass: RenderPass,
     start_time: Instant,
+    cursor_size: f32,
 }
 
 impl GUI {
@@ -30,12 +31,15 @@ impl GUI {
 
         let start_time = Instant::now();
 
+        let cursor_size = 20.0;
+
         return Self {
             size,
             scale_factor,
             platform,
             rpass,
             start_time,
+            cursor_size,
         }
     }
 
@@ -60,6 +64,7 @@ impl GUI {
             let ctx = self.platform.context();
             egui::Window::new("Stats").show(&ctx, |ui| {
                 ui.label("FPS: -");
+                ui.add(egui::Slider::new(&mut self.cursor_size, 5.0..=40.0).text("cursor size"));
             });
         }
 
@@ -84,5 +89,9 @@ impl GUI {
         ).unwrap();
 
         return output;
+    }
+
+    pub fn cursor_size(&self) -> f32 {
+        return self.cursor_size * self.scale_factor as f32;
     }
 }

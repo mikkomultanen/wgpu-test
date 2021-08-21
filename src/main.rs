@@ -12,6 +12,7 @@ use winit::{
 struct Uniforms {
     pub mouse: [f32; 2],
     pub size: [f32; 2],
+    pub cursor_size: f32,
 }
 
 impl Default for Uniforms {
@@ -19,6 +20,7 @@ impl Default for Uniforms {
         Uniforms {
             mouse: [0.0, 0.0],
             size: [1.0, 1.0],
+            cursor_size: 20.0,
         }
     }
 }
@@ -194,7 +196,8 @@ impl State {
     }
 
     fn update(&mut self) {
-        self.gui.update();        
+        self.gui.update();
+        self.uniforms.cursor_size = self.gui.cursor_size();
         self.queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[self.uniforms]));
     }
 
