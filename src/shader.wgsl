@@ -33,9 +33,10 @@ var uniforms: Uniforms;
 [[stage(fragment)]]
 fn main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
     let mouse_screen = 0.5 * (uniforms.mouse * vec2<f32>(1.,-1.) + vec2<f32>(1., 1.)) * uniforms.size;
-    let d = length(mouse_screen - in.position.xy);
+    let d = distance(mouse_screen, in.position.xy);
     let cursor_size = 0.5 * uniforms.cursor_size;
-    let cursor_a = smoothStep(cursor_size - 1., cursor_size, d) * smoothStep(cursor_size + 1., cursor_size, d);
+    let delta = fwidth(in.position.x);
+    let cursor_a = smoothStep(cursor_size - delta, cursor_size, d) * smoothStep(cursor_size + delta, cursor_size, d);
     let cursor = vec4<f32>(1., 1., 1., 1.);
 
     let normalized = 0.5 * (in.coord + vec2<f32>(1., 1.));
