@@ -1,4 +1,5 @@
 mod gui;
+mod sdf;
 
 use wgpu::util::DeviceExt;
 use winit::{
@@ -38,6 +39,8 @@ struct State {
     uniform_buffer: wgpu::Buffer,
     uniform_bind_group: wgpu::BindGroup,
     gui: gui::GUI,
+    sdf: sdf::SDF,
+    sdf_bind_group: wgpu::BindGroup,
 }
 
 impl State {
@@ -106,10 +109,56 @@ impl State {
             label: Some("uniform_bind_group"),
         });
 
+        let sdf = sdf::SDF::new(256, 256, &device, &queue);
+
+        let sdf_texture_bind_group_layout = device.create_bind_group_layout(
+            &wgpu::BindGroupLayoutDescriptor {
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler {
+                            comparison: false,
+                            filtering: true,
+                        },
+                        count: None,
+                    },
+                ],
+                label: Some("sdf_texture_bind_group_layout"),
+            }
+        );
+
+        let sdf_bind_group = device.create_bind_group(
+            &wgpu::BindGroupDescriptor {
+                layout: &sdf_texture_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&sdf.view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&sdf.sampler),
+                    }
+                ],
+                label: Some("sdf_bind_group"),
+            }
+        );
+
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[&uniform_bind_group_layout],
+                bind_group_layouts: &[&uniform_bind_group_layout, &sdf_texture_bind_group_layout],
                 push_constant_ranges: &[],
             });
 
@@ -167,6 +216,8 @@ impl State {
             uniform_buffer,
             uniform_bind_group,
             gui,
+            sdf,
+            sdf_bind_group,
         }
     }
 
@@ -199,6 +250,7 @@ impl State {
         self.gui.update();
         self.uniforms.cursor_size = self.gui.cursor_size();
         self.queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[self.uniforms]));
+        self.sdf.update(self.uniforms.mouse, &self.device, &self.queue);
     }
 
     fn render(&mut self) -> Result<(), String> {
@@ -236,6 +288,7 @@ impl State {
             });
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
+            render_pass.set_bind_group(1, &self.sdf_bind_group, &[]);
             render_pass.draw(0..3, 0..1);
         }
         
@@ -252,6 +305,8 @@ fn main() {
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
     .with_title("WGPU test")
+    .with_resizable(false)
+    .with_inner_size(winit::dpi::LogicalSize::new(640, 640))
     .build(&event_loop).unwrap();
 
     let mut state = pollster::block_on(State::new(&window));

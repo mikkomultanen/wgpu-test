@@ -30,6 +30,11 @@ struct Uniforms {
 [[group(0), binding(0)]]
 var uniforms: Uniforms;
 
+[[group(1), binding(0)]]
+var t_sdf: texture_2d<f32>;
+[[group(1), binding(1)]]
+var s_sdf: sampler;
+
 [[stage(fragment)]]
 fn main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
     let mouse_screen = 0.5 * (uniforms.mouse * vec2<f32>(1.,-1.) + vec2<f32>(1., 1.)) * uniforms.size;
@@ -40,7 +45,8 @@ fn main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
     let cursor = vec4<f32>(1., 1., 1., 1.);
 
     let normalized = 0.5 * (in.coord + vec2<f32>(1., 1.));
-    let c = vec4<f32>(normalized.rg, 0., 1.0);
+    let c = textureSample(t_sdf, s_sdf, normalized);
+    //let c = vec4<f32>(normalized.rg, 0., 1.0);
 
     return mix(c, cursor, cursor_a);
 }
