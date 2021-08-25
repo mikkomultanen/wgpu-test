@@ -182,8 +182,10 @@ impl SDF {
         }
     }
 
-    pub fn update(&mut self, mouse: [f32; 2], device: &wgpu::Device, queue: &wgpu::Queue) {
+    pub fn add(&mut self, mouse: [f32; 2], size: [f32; 2], cursor_size: f32, device: &wgpu::Device, queue: &wgpu::Queue) {
         self.uniforms.mouse = mouse;
+        self.uniforms.size = size;
+        self.uniforms.cursor_size = cursor_size;
         queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[self.uniforms]));
 
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {

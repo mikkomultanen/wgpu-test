@@ -41,6 +41,7 @@ struct State {
     gui: gui::GUI,
     sdf: sdf::SDF,
     sdf_bind_group: wgpu::BindGroup,
+    mouse_down: bool,
 }
 
 impl State {
@@ -218,6 +219,7 @@ impl State {
             gui,
             sdf,
             sdf_bind_group,
+            mouse_down: false,
         }
     }
 
@@ -233,7 +235,10 @@ impl State {
         }
     }
 
-    fn input(&mut self, event: &WindowEvent) -> bool {
+    fn input(&mut self, event: &WindowEvent, gui_captured: bool) -> bool {
+        if gui_captured {
+            self.mouse_down = false;
+        }
         match event {
             WindowEvent::CursorMoved { position, .. } => {
                 let size = self.size;
@@ -241,6 +246,14 @@ impl State {
                 let normalized_y = position.y as f32 / size.height as f32;
                 self.uniforms.mouse = [normalized_x * 2. - 1., -normalized_y * 2. + 1.];
             true
+            }
+            WindowEvent::MouseInput { state, button, ..} => if !gui_captured {
+                if *button == MouseButton::Left {
+                    self.mouse_down = *state == ElementState::Pressed;
+                }
+                true
+            } else {
+                false
             }
             _ => false,
         }
@@ -250,7 +263,9 @@ impl State {
         self.gui.update();
         self.uniforms.cursor_size = self.gui.cursor_size();
         self.queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[self.uniforms]));
-        self.sdf.update(self.uniforms.mouse, &self.device, &self.queue);
+        if self.mouse_down {
+            self.sdf.add(self.uniforms.mouse, self.uniforms.size, self.uniforms.cursor_size, &self.device, &self.queue);
+        }
     }
 
     fn render(&mut self) -> Result<(), String> {
@@ -312,7 +327,7 @@ fn main() {
     let mut state = pollster::block_on(State::new(&window));
 
     event_loop.run(move |winit_event, _, control_flow| {
-        let _gui_captured = state.gui.input(&winit_event);
+        let gui_captured = state.gui.input(&winit_event);
 
         // TODO use gui_captured to skip mouse clicks and keypresses
 
@@ -320,7 +335,7 @@ fn main() {
             Event::WindowEvent {
                 ref event,
                 window_id,
-            } if window_id == window.id() => if !state.input(event) {
+            } if window_id == window.id() => if !state.input(event, gui_captured) {
                 match event {
                     WindowEvent::CloseRequested
                     | WindowEvent::KeyboardInput {

@@ -1,6 +1,7 @@
 // Vertex shader
 
 struct VertexOutput {
+    [[location(0)]] coord: vec2<f32>;
     [[builtin(position)]] position: vec4<f32>;
 };
 
@@ -12,7 +13,8 @@ fn main([[builtin(vertex_index)]] in_vertex_index: u32) -> VertexOutput {
         vec2<f32>(-1., 1.),
     );
     var out: VertexOutput;
-    out.position = vec4<f32>(vertices[in_vertex_index], 0.0, 1.0);
+    out.coord = vertices[in_vertex_index];
+    out.position = vec4<f32>(out.coord, 0.0, 1.0);
     return out;
 }
 
@@ -30,11 +32,6 @@ var uniforms: Uniforms;
 
 [[stage(fragment)]]
 fn main(in: VertexOutput) -> [[location(0)]] f32 {
-    let mouse_screen = 0.5 * (uniforms.mouse + vec2<f32>(1., 1.)) * uniforms.size;
-    let d = distance(mouse_screen, in.position.xy);
-    let cursor_size = 0.5 * uniforms.cursor_size;
-    let delta = fwidth(in.position.x);
-    let cursor_a = smoothStep(cursor_size - delta, cursor_size, d);
-
-    return mix(0.0, 1.0, cursor_a);
+    let d_normalized = 0.5 * (uniforms.mouse * vec2<f32>(1.,-1.) - in.coord);
+    return length(d_normalized * uniforms.size) - 0.5 * uniforms.cursor_size;
 }
