@@ -1,7 +1,17 @@
+[[block]]
+struct Uniforms {
+    mouse: vec2<f32>;
+    size: vec2<f32>;
+    cursor_size: f32;
+};
+
+[[group(0), binding(0)]]
+var uniforms: Uniforms;
+
 // Vertex shader
 
 struct VertexOutput {
-    [[location(0)]] coord: vec2<f32>;
+    [[location(0)]] world_pos: vec2<f32>;
     [[builtin(position)]] position: vec4<f32>;
 };
 
@@ -13,25 +23,14 @@ fn main([[builtin(vertex_index)]] in_vertex_index: u32) -> VertexOutput {
         vec2<f32>(-1., 1.),
     );
     var out: VertexOutput;
-    out.coord = vertices[in_vertex_index];
-    out.position = vec4<f32>(out.coord, 0.0, 1.0);
+    out.position = vec4<f32>(vertices[in_vertex_index], 0.0, 1.0);
+    out.world_pos = 0.5 * out.position.xy * uniforms.size;
     return out;
 }
 
 // Fragment shader
 
-[[block]]
-struct Uniforms {
-    mouse: vec2<f32>;
-    size: vec2<f32>;
-    cursor_size: f32;
-};
-
-[[group(0), binding(0)]]
-var uniforms: Uniforms;
-
 [[stage(fragment)]]
 fn main(in: VertexOutput) -> [[location(0)]] f32 {
-    let d_normalized = 0.5 * (uniforms.mouse * vec2<f32>(1.,-1.) - in.coord);
-    return length(d_normalized * uniforms.size) - 0.5 * uniforms.cursor_size;
+    return length(uniforms.mouse - in.world_pos) - 0.5 * uniforms.cursor_size;
 }

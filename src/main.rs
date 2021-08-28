@@ -1,6 +1,7 @@
 mod gui;
 mod sdf;
 
+use cgmath::*;
 use wgpu::util::DeviceExt;
 use winit::{
     event::*,
@@ -13,14 +14,18 @@ use winit::{
 struct Uniforms {
     pub mouse: [f32; 2],
     pub size: [f32; 2],
+    pub inv_size: [f32; 2],
     pub cursor_size: f32,
 }
+
+const WORLD_SIZE: Vector2<f32> = Vector2 { x: 1000.0, y: 1000.0 };
 
 impl Default for Uniforms {
     fn default() -> Uniforms {
         Uniforms {
             mouse: [0.0, 0.0],
-            size: [1.0, 1.0],
+            size: [WORLD_SIZE.x, WORLD_SIZE.y],
+            inv_size: [1.0 / WORLD_SIZE.x, 1.0 / WORLD_SIZE.y],
             cursor_size: 20.0,
         }
     }
@@ -41,6 +46,7 @@ struct State {
     gui: gui::GUI,
     sdf: sdf::SDF,
     sdf_bind_group: wgpu::BindGroup,
+    mouse_pos: Vector2<f32>,
     mouse_down: bool,
 }
 
@@ -74,8 +80,7 @@ impl State {
             source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
         });
 
-        let mut uniforms = Uniforms::default();
-        uniforms.size = [size.width as f32, size.height as f32];
+        let uniforms = Uniforms::default();
         
         let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Uniform Buffer"),
@@ -88,7 +93,7 @@ impl State {
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
                     count: None,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
@@ -219,6 +224,7 @@ impl State {
             gui,
             sdf,
             sdf_bind_group,
+            mouse_pos: Vector2::zero(),
             mouse_down: false,
         }
     }
@@ -228,7 +234,6 @@ impl State {
             self.gui.resize(&new_size, new_scale_factor);
             self.size = new_size;
             self.scale_factor = new_scale_factor;
-            self.uniforms.size = [new_size.width as f32, new_size.height as f32];
             self.config.width = new_size.width;
             self.config.height = new_size.height;
             self.surface.configure(&self.device, &self.config);
@@ -244,7 +249,9 @@ impl State {
                 let size = self.size;
                 let normalized_x = position.x as f32 / size.width as f32;
                 let normalized_y = position.y as f32 / size.height as f32;
-                self.uniforms.mouse = [normalized_x * 2. - 1., -normalized_y * 2. + 1.];
+                let world_x = (normalized_x - 0.5) * WORLD_SIZE.x;
+                let world_y = (0.5 - normalized_y) * WORLD_SIZE.y; 
+                self.mouse_pos = Vector2 { x: world_x, y: world_y };
             true
             }
             WindowEvent::MouseInput { state, button, ..} => if !gui_captured {
@@ -262,6 +269,7 @@ impl State {
     fn update(&mut self) {
         self.gui.update();
         self.uniforms.cursor_size = self.gui.cursor_size();
+        self.uniforms.mouse = [self.mouse_pos.x, self.mouse_pos.y];
         self.queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[self.uniforms]));
         if self.mouse_down {
             self.sdf.add(self.uniforms.mouse, self.uniforms.size, self.uniforms.cursor_size, &self.device, &self.queue);
