@@ -18,7 +18,8 @@ struct Uniforms {
     pub cursor_size: f32,
 }
 
-const WORLD_SIZE: Vector2<f32> = Vector2 { x: 1000.0, y: 1000.0 };
+const WORLD_SIZE: Vector2<f32> = Vector2::new(1000.0, 1000.0);
+const SDF_SIZE: u32 = 256;
 
 impl Default for Uniforms {
     fn default() -> Uniforms {
@@ -115,7 +116,7 @@ impl State {
             label: Some("uniform_bind_group"),
         });
 
-        let sdf = sdf::SDF::new(256, 256, &device, &queue);
+        let sdf = sdf::SDF::new(SDF_SIZE, WORLD_SIZE, &device, &queue);
 
         let sdf_texture_bind_group_layout = device.create_bind_group_layout(
             &wgpu::BindGroupLayoutDescriptor {
@@ -272,7 +273,7 @@ impl State {
         self.uniforms.mouse = [self.mouse_pos.x, self.mouse_pos.y];
         self.queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[self.uniforms]));
         if self.mouse_down {
-            self.sdf.add(self.uniforms.mouse, self.uniforms.size, self.uniforms.cursor_size, &self.device, &self.queue);
+            self.sdf.add(self.uniforms.mouse, self.uniforms.cursor_size, &self.device, &self.queue);
         }
     }
 

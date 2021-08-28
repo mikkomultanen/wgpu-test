@@ -43,6 +43,25 @@ fn sceneDist(world_pos: vec2<f32>) -> f32 {
     return textureSample(t_sdf, s_sdf, uv).r;
 }
 
+fn drawLight(p: vec2<f32>, pos: vec2<f32>, color: vec4<f32>, dist: f32, range: f32, radius: f32, pChange: f32) -> vec4<f32>
+{
+	// distance to light
+	let ld = length(p - pos);
+	
+	// out of range
+	if (ld > range) {
+        return vec4<f32>(0., 0., 0., 1.);
+    }
+	
+	// shadow and falloff
+	//float shad = shadow(p, pos, radius);
+    let shad = 1.0;
+	var fall = (range - ld) / range;
+	fall = fall * fall;
+	let source = 1.0 - clamp((ld - radius) / pChange + 0.5, 0.0, 1.0);
+	return (shad * fall + source) * color;
+}
+
 [[stage(fragment)]]
 fn main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
     let cursorSize = 0.5 * uniforms.cursor_size;
@@ -51,28 +70,18 @@ fn main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
     let _CursorThickness = 2.0;
     let _CursorCol = vec4<f32>(0., 0., 0.5, 1.);
 
-    let coordChange = 0.5 * fwidth(in.world_pos.x);
-    let cursorAlpha = smoothStep(cursorSize - _CursorThickness * coordChange, cursorSize - max(_CursorThickness - 1., 0.) * coordChange, mouseDistance) * smoothStep(cursorSize + _CursorThickness * coordChange, cursorSize + max(_CursorThickness - 1., 0.) * coordChange, mouseDistance);
+    let worldPosChange = 0.5 * fwidth(in.world_pos.x);
+    let cursorAlpha = smoothStep(cursorSize - _CursorThickness * worldPosChange, cursorSize - max(_CursorThickness - 1., 0.) * worldPosChange, mouseDistance) * smoothStep(cursorSize + _CursorThickness * worldPosChange, cursorSize + max(_CursorThickness - 1., 0.) * worldPosChange, mouseDistance);
 
     let dist = sceneDist(in.world_pos);
 
-    let _InsideColor = vec4<f32>(0.5, 0., 0., 1.);
-    let _OutsideColor = vec4<f32>(0., 0.5, 0., 1.);
-    let col = mix(_InsideColor, _OutsideColor, step(0., dist));
+    let _InsideColor = vec4<f32>(1.0, 0.4, 0.0, 1.0);
+    let p = in.world_pos + 0.5 * uniforms.size;
+    var _OutsideColor = vec4<f32>(0.5, 0.5, 0.5, 1.0) * clamp(min(p.y % 10.0, p.x % 10.0), 0.9, 1.0);// * clamp(dist % 20.0, 0.8, 1.0);
+    var light = drawLight(in.world_pos, uniforms.mouse, vec4<f32>(0.75, 1.0, 0.5, 1.0), dist, 0.5 * uniforms.size.x, 5.0, worldPosChange);
+    light.a = 1.0;
+    _OutsideColor = _OutsideColor * light;
+    let col = mix(_InsideColor, _OutsideColor, clamp(dist / worldPosChange + 0.5, 0.0, 1.0));
 
-    let _LineDistance = 100.0;
-    let _LineThickness = 2.0;
-
-    let distanceChange = fwidth(dist) * 0.5;
-    let majorLineDistance = abs(fract(dist / _LineDistance + 0.5) - 0.5) * _LineDistance;
-    let majorLines = smoothStep(_LineThickness - distanceChange, _LineThickness + distanceChange, majorLineDistance);
-
-    let _SubLines = 5.0;
-    let _SubLineThickness = 1.0;
-
-    let distanceBetweenSubLines = _LineDistance / _SubLines;
-    let subLineDistance = abs(fract(dist / distanceBetweenSubLines + 0.5) - 0.5) * distanceBetweenSubLines;
-    let subLines = smoothStep(_SubLineThickness - distanceChange, _SubLineThickness + distanceChange, subLineDistance);
-
-    return mix(col * majorLines * subLines, _CursorCol, cursorAlpha);
+    return mix(col, _CursorCol, cursorAlpha);
 }
