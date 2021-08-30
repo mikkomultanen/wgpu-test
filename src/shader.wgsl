@@ -43,10 +43,29 @@ fn sceneDist(world_pos: vec2<f32>) -> f32 {
     return textureSample(t_sdf, s_sdf, uv).r;
 }
 
+fn hardShadow(p: vec2<f32>, lightDir: vec2<f32>, lightDistance: f32, radius: f32) -> f32 {
+    if (lightDistance < radius) {
+        return 1.;
+    }
+    var d: f32 = 0.0;
+    for(var i: i32 = 0; i < 32; i = i + 1) {
+        let h = sceneDist(p + d * lightDir);
+        if( h < .001) {
+            return 0.;
+        }            
+        d = d + h;
+        if(d > lightDistance - radius) {
+            return 1.;
+        }
+    }
+    return 0.;
+}
+
 fn drawLight(p: vec2<f32>, pos: vec2<f32>, color: vec4<f32>, dist: f32, range: f32, radius: f32, pChange: f32) -> vec4<f32>
 {
+    let d = pos - p;
 	// distance to light
-	let ld = length(p - pos);
+	let ld = length(d);
 	
 	// out of range
 	if (ld > range) {
@@ -54,8 +73,7 @@ fn drawLight(p: vec2<f32>, pos: vec2<f32>, color: vec4<f32>, dist: f32, range: f
     }
 	
 	// shadow and falloff
-	//float shad = shadow(p, pos, radius);
-    let shad = 1.0;
+	let shad = hardShadow(p, d / max(radius, ld), ld, radius);
 	var fall = (range - ld) / range;
 	fall = fall * fall;
 	let source = 1.0 - clamp((ld - radius) / pChange + 0.5, 0.0, 1.0);
@@ -70,17 +88,25 @@ fn main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
     let _CursorThickness = 2.0;
     let _CursorCol = vec4<f32>(0., 0., 0.5, 1.);
 
-    let worldPosChange = 0.5 * fwidth(in.world_pos.x);
-    let cursorAlpha = smoothStep(cursorSize - _CursorThickness * worldPosChange, cursorSize - max(_CursorThickness - 1., 0.) * worldPosChange, mouseDistance) * smoothStep(cursorSize + _CursorThickness * worldPosChange, cursorSize + max(_CursorThickness - 1., 0.) * worldPosChange, mouseDistance);
+    let worldPosChange = fwidth(in.world_pos.x);
+    let cursorAlpha = smoothStep(_CursorThickness * worldPosChange, 0., abs(mouseDistance - cursorSize));
 
     let dist = sceneDist(in.world_pos);
 
-    let _InsideColor = vec4<f32>(1.0, 0.4, 0.0, 1.0);
+    var _InsideColor = vec4<f32>(1.0, 0.4, 0.0, 1.0);
+    let insideField = smoothStep(2. * worldPosChange, 0., abs((-dist + 5.) % 10. - 5.));
+    _InsideColor = mix(_InsideColor, vec4<f32>(.5, .2, 0.0, 1.0), insideField);
+
+    var _OutsideColor = vec4<f32>(0.5, 0.5, 0.5, 1.0);
     let p = in.world_pos + 0.5 * uniforms.size;
-    var _OutsideColor = vec4<f32>(0.5, 0.5, 0.5, 1.0) * clamp(min(p.y % 10.0, p.x % 10.0), 0.9, 1.0);// * clamp(dist % 20.0, 0.8, 1.0);
+    let grid = smoothStep(2. * worldPosChange, 0., min(abs(p.x % 10. - 5.), abs(p.y % 10. - 5.)));
+    _OutsideColor = mix(_OutsideColor, vec4<f32>(.4, .4, .4, 1.), grid);
+    let field = smoothStep(2. * worldPosChange, 0., abs((dist + 10.) % 20. - 10.));
+    _OutsideColor = mix(_OutsideColor, vec4<f32>(.3, .3, .3, 1.), field);
     var light = drawLight(in.world_pos, uniforms.mouse, vec4<f32>(0.75, 1.0, 0.5, 1.0), dist, 0.5 * uniforms.size.x, 5.0, worldPosChange);
     light.a = 1.0;
     _OutsideColor = _OutsideColor * light;
+
     let col = mix(_InsideColor, _OutsideColor, clamp(dist / worldPosChange + 0.5, 0.0, 1.0));
 
     return mix(col, _CursorCol, cursorAlpha);
