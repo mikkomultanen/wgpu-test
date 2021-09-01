@@ -61,6 +61,33 @@ fn hardShadow(p: vec2<f32>, lightDir: vec2<f32>, lightDistance: f32, radius: f32
     return 0.;
 }
 
+fn softShadow(p: vec2<f32>, lightDir: vec2<f32>, lightDistance: f32, radius: f32) -> f32 {
+    if (lightDistance <= radius) {
+        return 1.;
+    }
+    var r: f32 = 1.0;
+    var d: f32 = 0.02;
+    var ph: f32 = 1.0e20;
+    let k = radius / lightDistance;
+    //let k = radius * inverseSqrt(lightDistance * lightDistance - radius * radius);
+    for(var i: i32 = 0; i < 64; i = i + 1) {
+        let extra = d * k;
+        let h = sceneDist(p + d * lightDir) + extra;
+        if( h < .001) {
+            return 0.;
+        }
+        if(d + h - extra > lightDistance - radius) {
+            return r;
+        }
+        let y = h*h/(2.0*ph);
+        let t = sqrt(h*h-y*y);
+        r = min(r, t/max(0.0,(d + h - y)*k));
+        ph = h;
+        d = d + .5 * h;
+    }
+    return 0.;
+}
+
 fn drawLight(p: vec2<f32>, pos: vec2<f32>, color: vec4<f32>, dist: f32, range: f32, radius: f32, pChange: f32) -> vec4<f32>
 {
     let d = pos - p;
@@ -73,11 +100,11 @@ fn drawLight(p: vec2<f32>, pos: vec2<f32>, color: vec4<f32>, dist: f32, range: f
     }
 	
 	// shadow and falloff
-	let shad = hardShadow(p, d / max(radius, ld), ld, radius);
-	var fall = (range - ld) / range;
+	let shad = softShadow(p, d / max(radius, ld), ld, radius);
+	var fall = (range - ld + radius) / range;
 	fall = fall * fall;
 	let source = 1.0 - clamp((ld - radius) / pChange + 0.5, 0.0, 1.0);
-	return (shad * fall + source) * color;
+    return mix(shad * fall, 4., source) * color;
 }
 
 [[stage(fragment)]]
@@ -103,7 +130,7 @@ fn main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
     _OutsideColor = mix(_OutsideColor, vec4<f32>(.4, .4, .4, 1.), grid);
     let field = smoothStep(2. * worldPosChange, 0., abs((dist + 10.) % 20. - 10.));
     _OutsideColor = mix(_OutsideColor, vec4<f32>(.3, .3, .3, 1.), field);
-    var light = drawLight(in.world_pos, uniforms.mouse, vec4<f32>(0.75, 1.0, 0.5, 1.0), dist, 0.5 * uniforms.size.x, 5.0, worldPosChange);
+    var light = drawLight(in.world_pos, uniforms.mouse, vec4<f32>(0.75, 1.0, 0.5, 1.0), dist, 0.5 * uniforms.size.x, 10.0, worldPosChange);
     light.a = 1.0;
     _OutsideColor = _OutsideColor * light;
 
