@@ -2,6 +2,7 @@ mod gui;
 mod sdf;
 
 use cgmath::*;
+use std::time::{Duration, Instant};
 use wgpu::util::DeviceExt;
 use winit::{
     event::*,
@@ -63,7 +64,7 @@ impl State {
                 power_preference: wgpu::PowerPreference::HighPerformance,
                 compatible_surface: Some(&surface),
             },
-        ).await.unwrap();
+        ).await.expect("No suitable GPU adapters found on the system!");
 
         let (device, queue) = adapter.request_device(
             &wgpu::DeviceDescriptor {
@@ -72,7 +73,7 @@ impl State {
                 label: None,
             },
             None,
-        ).await.unwrap();
+        ).await.expect("Unable to find a suitable GPU adapter!");
 
         let surface_format = surface.get_preferred_format(&adapter).unwrap();
 
@@ -269,6 +270,11 @@ impl State {
 
     fn update(&mut self) {
         self.gui.update();
+        let present_mode = self.gui.present_mode();
+        if present_mode != self.config.present_mode {
+            self.config.present_mode = present_mode;
+            self.surface.configure(&self.device, &self.config);
+        }
         self.uniforms.cursor_size = self.gui.cursor_size();
         self.uniforms.mouse = [self.mouse_pos.x, self.mouse_pos.y];
         self.queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[self.uniforms]));
@@ -334,11 +340,13 @@ fn main() {
     .build(&event_loop).unwrap();
 
     let mut state = pollster::block_on(State::new(&window));
+    let max_frametime = Duration::from_secs_f64(1.0 / 200.0);
+    let mut last_update_inst = Instant::now();
+    let mut last_frame_inst = Instant::now();
+    let (mut frame_count, mut accum_time) = (0, 0.0);
 
     event_loop.run(move |winit_event, _, control_flow| {
         let gui_captured = state.gui.input(&winit_event);
-
-        // TODO use gui_captured to skip mouse clicks and keypresses
 
         match winit_event {
             Event::WindowEvent {
@@ -365,15 +373,32 @@ fn main() {
                     _ => {}
                 }
             }
+            Event::RedrawEventsCleared => {
+                let time_since_last_frame = last_update_inst.elapsed();
+                if time_since_last_frame >= max_frametime {
+                    window.request_redraw();
+                    last_update_inst = Instant::now();
+                } else {
+                    *control_flow = ControlFlow::WaitUntil(
+                        Instant::now() + max_frametime - time_since_last_frame,
+                    );
+                }
+            }
             Event::RedrawRequested(_) => {
+                accum_time += last_frame_inst.elapsed().as_secs_f32();
+                last_frame_inst = Instant::now();
+                frame_count += 1;
+                if frame_count == 60 {
+                    state.gui.update_fps(frame_count as f32 / accum_time);
+                    accum_time = 0.0;
+                    frame_count = 0;
+                }
+
                 state.update();
                 match state.render() {
                     Ok(_) => {}
                     Err(e) => eprintln!("{:?}", e),
                 }
-            }
-            Event::MainEventsCleared => {
-                window.request_redraw();
             }
             _ => {}
         }

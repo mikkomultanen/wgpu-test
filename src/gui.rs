@@ -3,6 +3,7 @@ use std::time::Instant;
 use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::{Platform, PlatformDescriptor};
 
+use std::string::String;
 use winit::window::Window;
 
 pub struct GUI {
@@ -12,6 +13,14 @@ pub struct GUI {
     rpass: RenderPass,
     start_time: Instant,
     cursor_size: f32,
+    v_sync: bool,
+    fps_str: String,
+    res_str: String,
+}
+
+fn res_str(size: &winit::dpi::PhysicalSize<u32>, scale_factor: f64) -> String {
+    let log_size: winit::dpi::LogicalSize<u32> = size.to_logical(scale_factor);
+    return format!("RES: {}x{}:{}x{}", log_size.width, log_size.height, size.width, size.height);
 }
 
 impl GUI {
@@ -40,12 +49,16 @@ impl GUI {
             rpass,
             start_time,
             cursor_size,
+            v_sync: true,
+            fps_str: format!("FPS: -"),
+            res_str: res_str(&size, scale_factor),
         }
     }
 
     pub fn resize(&mut self, size: &winit::dpi::PhysicalSize<u32>, scale_factor: f64) {
         self.size = *size;
         self.scale_factor = scale_factor;
+        self.res_str = res_str(size, scale_factor);
     }
 
     pub fn input<T>(&mut self, event: &winit::event::Event<T>) -> bool {
@@ -57,13 +70,30 @@ impl GUI {
         self.platform.update_time(self.start_time.elapsed().as_secs_f64());
     }
 
+    pub fn update_fps(&mut self, fps: f32) {
+        self.fps_str = format!("FPS: {:.1}", fps);
+    }
+
     pub fn render(&mut self, device: &mut wgpu::Device, queue: &mut wgpu::Queue, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) -> egui::Output {
         self.platform.begin_frame();
 
         {
             let ctx = self.platform.context();
-            egui::Window::new("Stats").show(&ctx, |ui| {
-                ui.label("FPS: -");
+            egui::Window::new("Stats")
+            .resizable(false)
+            .title_bar(false)
+            .anchor(egui::Align2::LEFT_BOTTOM, egui::Vec2::ZERO)
+            .show(&ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.add(egui::Checkbox::new(&mut self.v_sync, "VSync"));
+                    ui.label(self.fps_str.as_str());
+                    ui.label(self.res_str.as_str());
+                });
+            });
+
+            egui::Window::new("Tools")
+            .resizable(false)
+            .show(&ctx, |ui| {
                 ui.add(egui::Slider::new(&mut self.cursor_size, 5.0..=40.0).text("cursor size"));
             });
         }
@@ -88,10 +118,18 @@ impl GUI {
             None,
         ).unwrap();
 
-        return output;
+        output
     }
 
     pub fn cursor_size(&self) -> f32 {
-        return self.cursor_size * self.scale_factor as f32;
+        self.cursor_size * self.scale_factor as f32
+    }
+
+    pub fn present_mode(&self) -> wgpu::PresentMode {
+        if self.v_sync {
+            wgpu::PresentMode::Mailbox
+        } else {
+            wgpu::PresentMode::Immediate
+        }
     }
 }
