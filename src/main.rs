@@ -1,5 +1,6 @@
 mod gui;
 mod sdf;
+mod renderer;
 
 use cgmath::*;
 use std::time::{Duration, Instant};
@@ -19,6 +20,8 @@ struct Uniforms {
     pub cursor_size: f32,
 }
 
+const WINDOW_SIZE: winit::dpi::LogicalSize<u32> = winit::dpi::LogicalSize::new(640, 640);
+const RENDERER_SIZE: Vector2<u32> = Vector2::new(320, 320);
 const WORLD_SIZE: Vector2<f32> = Vector2::new(1000.0, 1000.0);
 const SDF_SIZE: u32 = 256;
 
@@ -47,7 +50,8 @@ struct State {
     uniform_bind_group: wgpu::BindGroup,
     gui: gui::GUI,
     sdf: sdf::SDF,
-    sdf_bind_group: wgpu::BindGroup,
+    renderer: renderer::Renderer,
+    renderer_bind_group: wgpu::BindGroup,
     mouse_pos: Vector2<f32>,
     mouse_down: bool,
 }
@@ -119,7 +123,9 @@ impl State {
 
         let sdf = sdf::SDF::new(SDF_SIZE, WORLD_SIZE, &device, &queue);
 
-        let sdf_texture_bind_group_layout = device.create_bind_group_layout(
+        let renderer = renderer::Renderer::new(RENDERER_SIZE, WORLD_SIZE, &device, &sdf.view, &sdf.sampler);
+
+        let renderer_texture_bind_group_layout = device.create_bind_group_layout(
             &wgpu::BindGroupLayoutDescriptor {
                 entries: &[
                     wgpu::BindGroupLayoutEntry {
@@ -142,31 +148,31 @@ impl State {
                         count: None,
                     },
                 ],
-                label: Some("sdf_texture_bind_group_layout"),
+                label: Some("renderer_texture_bind_group_layout"),
             }
         );
 
-        let sdf_bind_group = device.create_bind_group(
+        let renderer_bind_group = device.create_bind_group(
             &wgpu::BindGroupDescriptor {
-                layout: &sdf_texture_bind_group_layout,
+                layout: &renderer_texture_bind_group_layout,
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&sdf.view),
+                        resource: wgpu::BindingResource::TextureView(&renderer.view),
                     },
                     wgpu::BindGroupEntry {
                         binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&sdf.sampler),
+                        resource: wgpu::BindingResource::Sampler(&renderer.sampler),
                     }
                 ],
-                label: Some("sdf_bind_group"),
+                label: Some("renderer_bind_group"),
             }
         );
 
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[&uniform_bind_group_layout, &sdf_texture_bind_group_layout],
+                bind_group_layouts: &[&uniform_bind_group_layout, &renderer_texture_bind_group_layout],
                 push_constant_ranges: &[],
             });
 
@@ -225,7 +231,8 @@ impl State {
             uniform_bind_group,
             gui,
             sdf,
-            sdf_bind_group,
+            renderer,
+            renderer_bind_group,
             mouse_pos: Vector2::zero(),
             mouse_down: false,
         }
@@ -281,6 +288,7 @@ impl State {
         if self.mouse_down {
             self.sdf.add(self.uniforms.mouse, self.uniforms.cursor_size, &self.device, &self.queue);
         }
+        self.renderer.update(self.uniforms.mouse, &self.device, &self.queue);
     }
 
     fn render(&mut self) -> Result<(), String> {
@@ -318,7 +326,7 @@ impl State {
             });
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
-            render_pass.set_bind_group(1, &self.sdf_bind_group, &[]);
+            render_pass.set_bind_group(1, &self.renderer_bind_group, &[]);
             render_pass.draw(0..3, 0..1);
         }
         
@@ -336,7 +344,7 @@ fn main() {
     let window = WindowBuilder::new()
     .with_title("WGPU test")
     .with_resizable(false)
-    .with_inner_size(winit::dpi::LogicalSize::new(640, 640))
+    .with_inner_size(WINDOW_SIZE)
     .build(&event_loop).unwrap();
 
     let mut state = pollster::block_on(State::new(&window));
