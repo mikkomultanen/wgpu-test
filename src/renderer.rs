@@ -6,6 +6,7 @@ struct Uniforms {
     pub mouse: [f32; 2],
     pub size: [f32; 2],
     pub inv_size: [f32; 2],
+    pub time: f32,
 }
 
 impl Default for Uniforms {
@@ -14,6 +15,7 @@ impl Default for Uniforms {
             mouse: [0.0, 0.0],
             size: [1.0, 1.0],
             inv_size: [1.0, 1.0],
+            time: 0.0,
         }
     }
 }
@@ -159,7 +161,7 @@ impl Renderer {
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: "main",
+                entry_point: "main_gi",
                 targets: &[wgpu::ColorTargetState {
                     format: texture_format,
                     blend: Some(wgpu::BlendState::REPLACE),
@@ -194,8 +196,9 @@ impl Renderer {
         }
     }
 
-    pub fn update(&mut self, mouse: [f32; 2], device: &wgpu::Device, queue: &wgpu::Queue) {
+    pub fn update(&mut self, mouse: [f32; 2], time: f32, device: &wgpu::Device, queue: &wgpu::Queue) {
         self.uniforms.mouse = mouse;
+        self.uniforms.time = time;
         queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[self.uniforms]));
 
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {

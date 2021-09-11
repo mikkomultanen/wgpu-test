@@ -3,6 +3,7 @@ struct Uniforms {
     mouse: vec2<f32>;
     size: vec2<f32>;
     inv_size: vec2<f32>;
+    time: f32;
 };
 
 [[group(0), binding(0)]]
@@ -123,6 +124,71 @@ fn main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
     let field = smoothStep(2. * worldPosChange, 0., abs((dist + 10.) % 20. - 10.));
     _OutsideColor = mix(_OutsideColor, vec4<f32>(.3, .3, .3, 1.), field);
     var light = drawLight(in.world_pos, uniforms.mouse, vec4<f32>(0.75, 1.0, 0.5, 1.0), dist, 0.5 * uniforms.size.x, 10.0, worldPosChange);
+    light.a = 1.0;
+    _OutsideColor = _OutsideColor * light;
+
+    let col = mix(_InsideColor, _OutsideColor, clamp(dist / worldPosChange + 0.5, 0.0, 1.0));
+
+    return col;
+}
+
+fn lightDist(p: vec2<f32>) -> f32 {
+    return length(uniforms.mouse - p) - 10.;
+}
+
+fn trace(p: vec2<f32>, dir: vec2<f32>, worldPosChange: f32) -> vec4<f32>
+{
+    var dl = 0.02;
+    var d: vec2<f32> = p + dl * dir;
+    let range = 0.5 * uniforms.size.x;
+    for(var i: i32 = 0; i < 16; i = i + 1) {
+        let h = sceneDist(d);
+        let l = lightDist(d) + 1.;
+        if( h < worldPosChange) {
+            return vec4<f32>(0., 0., 0., 1.);
+        }
+        if( l - 1. < worldPosChange) {
+            let fall = (range - dl - l + 10.0) / range;
+            return vec4<f32>(0.75, 1.0, 0.5, 1.0) * fall;
+        }
+        let m = min(h, l);
+        dl = dl + m;
+        if(dl > range) {
+            return vec4<f32>(0., 0., 0., 1.);
+        }
+        d = d +  m * dir;
+    }
+    return vec4<f32>(0., 0., 0., 1.);
+}
+
+fn random(p: vec2<f32>) -> f32 {
+    return fract(sin(dot(p, vec2<f32>(12.9898,78.233)))* 43758.5453123);
+}
+
+let SAMPLES: u32 = 16u;
+
+[[stage(fragment)]]
+fn main_gi(in: VertexOutput) -> [[location(0)]] vec4<f32> {
+    let worldPosChange = fwidth(in.world_pos.x);
+
+    let dist = sceneDist(in.world_pos);
+
+    var _InsideColor = vec4<f32>(1.0, 0.4, 0.0, 1.0);
+    let insideField = smoothStep(2. * worldPosChange, 0., abs((-dist + 5.) % 10. - 5.));
+    _InsideColor = mix(_InsideColor, vec4<f32>(.5, .2, 0.0, 1.0), insideField);
+
+    var _OutsideColor = vec4<f32>(0.5, 0.5, 0.5, 1.0);
+    let p = in.world_pos + 0.5 * uniforms.size;
+    let grid = smoothStep(2. * worldPosChange, 0., min(abs(p.x % 10. - 5.), abs(p.y % 10. - 5.)));
+    _OutsideColor = mix(_OutsideColor, vec4<f32>(.4, .4, .4, 1.), grid);
+    let field = smoothStep(2. * worldPosChange, 0., abs((dist + 10.) % 20. - 10.));
+    _OutsideColor = mix(_OutsideColor, vec4<f32>(.3, .3, .3, 1.), field);
+    var light = vec4<f32>(0., 0., 0., 1.);
+    for (var i = 0u; i < SAMPLES; i = i + 1u) {
+        let t = (f32(i) + random(in.world_pos + f32(i) + uniforms.time)) / f32(SAMPLES) * 2. * 3.1415;
+        light = light + trace(in.world_pos, vec2<f32>(cos(t), sin(t)), worldPosChange);
+    }
+    light = 4. * light / f32(SAMPLES);
     light.a = 1.0;
     _OutsideColor = _OutsideColor * light;
 

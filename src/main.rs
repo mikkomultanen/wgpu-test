@@ -21,7 +21,7 @@ struct Uniforms {
 }
 
 const WINDOW_SIZE: winit::dpi::LogicalSize<u32> = winit::dpi::LogicalSize::new(640, 640);
-const RENDERER_SIZE: Vector2<u32> = Vector2::new(320, 320);
+const RENDERER_SIZE: Vector2<u32> = Vector2::new(640, 640);
 const WORLD_SIZE: Vector2<f32> = Vector2::new(1000.0, 1000.0);
 const SDF_SIZE: u32 = 256;
 
@@ -54,6 +54,7 @@ struct State {
     renderer_bind_group: wgpu::BindGroup,
     mouse_pos: Vector2<f32>,
     mouse_down: bool,
+    start_time: Instant,
 }
 
 impl State {
@@ -218,6 +219,8 @@ impl State {
 
         let gui = gui::GUI::new(window, &device, &surface_format);
 
+        let start_time = Instant::now();
+
         Self {
             surface,
             device,
@@ -235,6 +238,7 @@ impl State {
             renderer_bind_group,
             mouse_pos: Vector2::zero(),
             mouse_down: false,
+            start_time,
         }
     }
 
@@ -286,9 +290,19 @@ impl State {
         self.uniforms.mouse = [self.mouse_pos.x, self.mouse_pos.y];
         self.queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[self.uniforms]));
         if self.mouse_down {
-            self.sdf.add(self.uniforms.mouse, self.uniforms.cursor_size, &self.device, &self.queue);
+            self.sdf.add(
+                self.uniforms.mouse, 
+                self.uniforms.cursor_size, 
+                &self.device, 
+                &self.queue
+            );
         }
-        self.renderer.update(self.uniforms.mouse, &self.device, &self.queue);
+        self.renderer.update(
+            self.uniforms.mouse, 
+            self.start_time.elapsed().as_secs_f32(), 
+            &self.device, 
+            &self.queue
+        );
     }
 
     fn render(&mut self) -> Result<(), String> {
