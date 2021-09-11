@@ -3,7 +3,7 @@ mod sdf;
 mod renderer;
 
 use cgmath::*;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use wgpu::util::DeviceExt;
 use winit::{
     event::*,
@@ -348,10 +348,9 @@ fn main() {
     .build(&event_loop).unwrap();
 
     let mut state = pollster::block_on(State::new(&window));
-    let max_frametime = Duration::from_secs_f64(1.0 / 200.0);
-    let mut last_update_inst = Instant::now();
     let mut last_frame_inst = Instant::now();
     let (mut frame_count, mut accum_time) = (0, 0.0);
+    let mut focused = false;
 
     event_loop.run(move |winit_event, _, control_flow| {
         let gui_captured = state.gui.input(&winit_event);
@@ -378,18 +377,20 @@ fn main() {
                     WindowEvent::ScaleFactorChanged { scale_factor, new_inner_size } => {
                         state.resize(**new_inner_size, *scale_factor);
                     }
+                    WindowEvent::Focused(new_focused) => {
+                        focused = *new_focused;
+                        if focused {
+                            window.request_redraw();
+                        }
+                    }
                     _ => {}
                 }
             }
             Event::RedrawEventsCleared => {
-                let time_since_last_frame = last_update_inst.elapsed();
-                if time_since_last_frame >= max_frametime {
+                if focused {
                     window.request_redraw();
-                    last_update_inst = Instant::now();
                 } else {
-                    *control_flow = ControlFlow::WaitUntil(
-                        Instant::now() + max_frametime - time_since_last_frame,
-                    );
+                    *control_flow = ControlFlow::Wait;
                 }
             }
             Event::RedrawRequested(_) => {
