@@ -1,8 +1,9 @@
 [[block]]
 struct Uniforms {
+    translate: vec2<f32>;
+    view_size: vec2<f32>;
+    world_size: vec2<f32>;
     mouse: vec2<f32>;
-    size: vec2<f32>;
-    inv_size: vec2<f32>;
     cursor_size: f32;
 };
 
@@ -26,7 +27,7 @@ fn main([[builtin(vertex_index)]] in_vertex_index: u32) -> VertexOutput {
     );
     var out: VertexOutput;
     out.position = vec4<f32>(vertices[in_vertex_index], 0.0, 1.0);
-    out.world_pos = 0.5 * out.position.xy * uniforms.size;
+    out.world_pos = uniforms.translate + 0.5 * out.position.xy * uniforms.view_size;
     out.uv = 0.5 * out.position.xy * vec2<f32>(1., -1.) + 0.5;
     return out;
 }
@@ -38,10 +39,15 @@ var t_result: texture_2d<f32>;
 [[group(1), binding(1)]]
 var s_result: sampler;
 
+fn wrap(p: vec2<f32>) -> vec2<f32> 
+{
+    return (p + 1.5 * uniforms.world_size) % uniforms.world_size - 0.5 * uniforms.world_size;
+}
+
 [[stage(fragment)]]
 fn main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
     let cursorSize = 0.5 * uniforms.cursor_size;
-    let mouseDistance = length(uniforms.mouse - in.world_pos);
+    let mouseDistance = length(wrap(uniforms.mouse - in.world_pos));
 
     let _CursorThickness = 2.0;
     let _CursorCol = vec4<f32>(0., 0., 0.5, 1.);

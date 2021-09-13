@@ -14,23 +14,25 @@ use winit::{
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Zeroable, bytemuck::Pod)]
 struct Uniforms {
+    pub translate: [f32; 2],
+    pub view_size: [f32; 2],
+    pub world_size: [f32; 2],
     pub mouse: [f32; 2],
-    pub size: [f32; 2],
-    pub inv_size: [f32; 2],
     pub cursor_size: f32,
 }
 
 const WINDOW_SIZE: winit::dpi::LogicalSize<u32> = winit::dpi::LogicalSize::new(640, 640);
 const RENDERER_SIZE: Vector2<u32> = Vector2::new(640, 640);
 const WORLD_SIZE: Vector2<f32> = Vector2::new(1000.0, 1000.0);
-const SDF_SIZE: u32 = 256;
+const SDF_SIZE: u32 = 1024;
 
 impl Default for Uniforms {
     fn default() -> Uniforms {
         Uniforms {
+            translate: [0.0, 0.0],
+            view_size: [WORLD_SIZE.x, WORLD_SIZE.y],
+            world_size: [WORLD_SIZE.x, WORLD_SIZE.y],
             mouse: [0.0, 0.0],
-            size: [WORLD_SIZE.x, WORLD_SIZE.y],
-            inv_size: [1.0 / WORLD_SIZE.x, 1.0 / WORLD_SIZE.y],
             cursor_size: 20.0,
         }
     }
@@ -52,8 +54,12 @@ struct State {
     sdf: sdf::SDF,
     renderer: renderer::Renderer,
     renderer_bind_group: wgpu::BindGroup,
-    mouse_pos: Vector2<f32>,
-    mouse_down: bool,
+    mouse_pos: Point2<f32>,
+    mouse_pressed: bool,
+    up_pressed: bool,
+    left_pressed: bool,
+    right_pressed: bool,
+    down_pressed: bool,
     start_time: Instant,
 }
 
@@ -236,8 +242,12 @@ impl State {
             sdf,
             renderer,
             renderer_bind_group,
-            mouse_pos: Vector2::zero(),
-            mouse_down: false,
+            mouse_pos: Point2::origin(),
+            mouse_pressed: false,
+            up_pressed: false,
+            left_pressed: false,
+            right_pressed: false,
+            down_pressed: false,
             start_time,
         }
     }
@@ -255,41 +265,64 @@ impl State {
 
     fn input(&mut self, event: &WindowEvent, gui_captured: bool) -> bool {
         if gui_captured {
-            self.mouse_down = false;
+            self.mouse_pressed = false;
         }
         match event {
             WindowEvent::CursorMoved { position, .. } => {
                 let size = self.size;
                 let normalized_x = position.x as f32 / size.width as f32;
                 let normalized_y = position.y as f32 / size.height as f32;
-                let world_x = (normalized_x - 0.5) * WORLD_SIZE.x;
-                let world_y = (0.5 - normalized_y) * WORLD_SIZE.y; 
-                self.mouse_pos = Vector2 { x: world_x, y: world_y };
-            true
+                self.mouse_pos = self.renderer.position + Vector2::new(
+                    (normalized_x - 0.5) * self.renderer.view_size.x,
+                    (0.5 - normalized_y) * self.renderer.view_size.y
+                );
+                true
             }
             WindowEvent::MouseInput { state, button, ..} => if !gui_captured {
-                if *button == MouseButton::Left {
-                    self.mouse_down = *state == ElementState::Pressed;
+                let pressed = *state == ElementState::Pressed;
+                match *button {
+                    MouseButton::Left => self.mouse_pressed = pressed,
+                    _ => (),
                 }
                 true
             } else {
                 false
             }
+            WindowEvent::KeyboardInput { input, ..} => {
+                let pressed = input.state == ElementState::Pressed;
+                match input.virtual_keycode {
+                    Some(VirtualKeyCode::Up) => { self.up_pressed = pressed; true},
+                    Some(VirtualKeyCode::Left) => { self.left_pressed = pressed; true },
+                    Some(VirtualKeyCode::Right) => { self.right_pressed = pressed; true },
+                    Some(VirtualKeyCode::Down) => { self.down_pressed = pressed; true },
+                    _ => false,
+                }
+            }
             _ => false,
         }
     }
 
-    fn update(&mut self) {
+    fn update(&mut self, frame_time: f32) {
         self.gui.update();
+        let mut d: Vector2<f32> = Vector2::zero();
+        if self.up_pressed { d += Vector2::unit_y(); }
+        if self.left_pressed { d += -Vector2::unit_x(); }
+        if self.right_pressed { d += Vector2::unit_x(); }
+        if self.down_pressed { d += -Vector2::unit_y(); }
+        d *= 0.2 * self.renderer.view_size.x * frame_time;
+        self.renderer.position = wrap(self.renderer.position + d);
+        self.mouse_pos = wrap(self.mouse_pos + d);
         let present_mode = self.gui.present_mode();
         if present_mode != self.config.present_mode {
             self.config.present_mode = present_mode;
             self.surface.configure(&self.device, &self.config);
         }
+        self.uniforms.translate = [self.renderer.position.x, self.renderer.position.y];
+        self.uniforms.view_size = [self.renderer.view_size.x, self.renderer.view_size.y];
         self.uniforms.cursor_size = self.gui.cursor_size();
         self.uniforms.mouse = [self.mouse_pos.x, self.mouse_pos.y];
         self.queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[self.uniforms]));
-        if self.mouse_down {
+        if self.mouse_pressed {
             self.sdf.add(
                 self.uniforms.mouse, 
                 self.uniforms.cursor_size, 
@@ -352,6 +385,12 @@ impl State {
     }
 }
 
+fn wrap(p: Point2<f32>) -> Point2<f32> {
+    let x = (p.x + 1.5 * WORLD_SIZE.x) % WORLD_SIZE.x - 0.5 * WORLD_SIZE.x;
+    let y = (p.y + 1.5 * WORLD_SIZE.y) % WORLD_SIZE.y - 0.5 * WORLD_SIZE.y;
+    Point2::new(x, y)
+}
+
 fn main() {
     env_logger::init();
     let event_loop = EventLoop::new();
@@ -408,7 +447,8 @@ fn main() {
                 }
             }
             Event::RedrawRequested(_) => {
-                accum_time += last_frame_inst.elapsed().as_secs_f32();
+                let frame_time = last_frame_inst.elapsed().as_secs_f32();
+                accum_time += frame_time;
                 last_frame_inst = Instant::now();
                 frame_count += 1;
                 if frame_count == 60 {
@@ -417,7 +457,7 @@ fn main() {
                     frame_count = 0;
                 }
 
-                state.update();
+                state.update(frame_time);
                 match state.render() {
                     Ok(_) => {}
                     Err(e) => eprintln!("{:?}", e),

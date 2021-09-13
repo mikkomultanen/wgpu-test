@@ -1,20 +1,25 @@
+use cgmath::*;
 use wgpu::util::DeviceExt;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Zeroable, bytemuck::Pod)]
 struct Uniforms {
+    pub translate: [f32; 2],
+    pub view_size: [f32; 2],
     pub mouse: [f32; 2],
-    pub size: [f32; 2],
-    pub inv_size: [f32; 2],
+    pub world_size: [f32; 2],
+    pub inv_world_size: [f32; 2],
     pub time: f32,
 }
 
 impl Default for Uniforms {
     fn default() -> Uniforms {
         Uniforms {
+            translate: [0.0, 0.0],
+            view_size: [1.0, 1.0],
             mouse: [0.0, 0.0],
-            size: [1.0, 1.0],
-            inv_size: [1.0, 1.0],
+            world_size: [1.0, 1.0], 
+            inv_world_size: [1.0, 1.0],
             time: 0.0,
         }
     }
@@ -28,15 +33,17 @@ pub struct Renderer {
     uniform_buffer: wgpu::Buffer,
     uniform_bind_group: wgpu::BindGroup,
     sdf_bind_group: wgpu::BindGroup,
+    pub position: Point2<f32>,
+    pub view_size: Vector2<f32>,
 }
 
 impl Renderer {
-    pub fn new(size: cgmath::Vector2<u32>, world_size: cgmath::Vector2<f32>, device: &wgpu::Device, sdf_view: &wgpu::TextureView, sdf_sampler: &wgpu::Sampler) -> Self {
+    pub fn new(resolution: Vector2<u32>, world_size: Vector2<f32>, device: &wgpu::Device, sdf_view: &wgpu::TextureView, sdf_sampler: &wgpu::Sampler) -> Self {
         let texture_format = wgpu::TextureFormat::Rgba8Unorm;
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             size: wgpu::Extent3d {
-                width: size.x,
-                height: size.y,
+                width: resolution.x,
+                height: resolution.y,
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
@@ -64,8 +71,9 @@ impl Renderer {
         });
 
         let mut uniforms = Uniforms::default();
-        uniforms.size = [world_size.x, world_size.y];
-        uniforms.inv_size = [1.0 / world_size.x, 1.0 / world_size.y];
+        uniforms.view_size = [world_size.x, world_size.y];
+        uniforms.world_size = [world_size.x, world_size.y];
+        uniforms.inv_world_size = [1.0 / world_size.x, 1.0 / world_size.y];
 
         let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Uniform Buffer"),
@@ -161,7 +169,7 @@ impl Renderer {
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: "main_gi",
+                entry_point: "main",
                 targets: &[wgpu::ColorTargetState {
                     format: texture_format,
                     blend: Some(wgpu::BlendState::REPLACE),
@@ -185,6 +193,9 @@ impl Renderer {
             },
         });
 
+        let position = Point2::new(0., 0.);
+        let view_size = Vector2::new(world_size.x, world_size.y);
+
         return Self {
             view,
             sampler,
@@ -193,10 +204,14 @@ impl Renderer {
             uniform_buffer,
             uniform_bind_group,
             sdf_bind_group,
+            position,
+            view_size,
         }
     }
 
     pub fn update(&mut self, mouse: [f32; 2], time: f32, device: &wgpu::Device, queue: &wgpu::Queue) {
+        self.uniforms.translate = [self.position.x, self.position.y];
+        self.uniforms.view_size = [self.view_size.x, self.view_size.y];
         self.uniforms.mouse = mouse;
         self.uniforms.time = time;
         queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[self.uniforms]));

@@ -1,8 +1,10 @@
 [[block]]
 struct Uniforms {
+    translate: vec2<f32>;
+    view_size: vec2<f32>;
     mouse: vec2<f32>;
-    size: vec2<f32>;
-    inv_size: vec2<f32>;
+    world_size: vec2<f32>;
+    inv_world_size: vec2<f32>;
     time: f32;
 };
 
@@ -25,7 +27,7 @@ fn main([[builtin(vertex_index)]] in_vertex_index: u32) -> VertexOutput {
     );
     var out: VertexOutput;
     out.position = vec4<f32>(vertices[in_vertex_index], 0.0, 1.0);
-    out.world_pos = 0.5 * out.position.xy * uniforms.size;
+    out.world_pos = uniforms.translate + 0.5 * out.position.xy * uniforms.view_size;
     return out;
 }
 
@@ -37,7 +39,7 @@ var t_sdf: texture_2d<f32>;
 var s_sdf: sampler;
 
 fn sceneDist(world_pos: vec2<f32>) -> f32 {
-    var uv = world_pos * uniforms.inv_size;
+    var uv = world_pos * uniforms.inv_world_size;
     uv.y = -uv.y;
     uv = uv + 0.5;
     return textureSample(t_sdf, s_sdf, uv).r;
@@ -88,9 +90,14 @@ fn softShadow(p: vec2<f32>, lightDir: vec2<f32>, lightDistance: f32, radius: f32
     return 0.;
 }
 
+fn wrap(p: vec2<f32>) -> vec2<f32> 
+{
+    return (p + 1.5 * uniforms.world_size) % uniforms.world_size - 0.5 * uniforms.world_size;
+}
+
 fn drawLight(p: vec2<f32>, pos: vec2<f32>, color: vec4<f32>, dist: f32, range: f32, radius: f32, pChange: f32) -> vec4<f32>
 {
-    let d = pos - p;
+    let d = wrap(pos - p);
 	// distance to light
 	let ld = length(d);
 	
@@ -118,12 +125,9 @@ fn main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
     _InsideColor = mix(_InsideColor, vec4<f32>(.5, .2, 0.0, 1.0), insideField);
 
     var _OutsideColor = vec4<f32>(0.5, 0.5, 0.5, 1.0);
-    let p = in.world_pos + 0.5 * uniforms.size;
-    let grid = smoothStep(2. * worldPosChange, 0., min(abs(p.x % 10. - 5.), abs(p.y % 10. - 5.)));
-    _OutsideColor = mix(_OutsideColor, vec4<f32>(.4, .4, .4, 1.), grid);
     let field = smoothStep(2. * worldPosChange, 0., abs((dist + 10.) % 20. - 10.));
     _OutsideColor = mix(_OutsideColor, vec4<f32>(.3, .3, .3, 1.), field);
-    var light = drawLight(in.world_pos, uniforms.mouse, vec4<f32>(0.75, 1.0, 0.5, 1.0), dist, 0.5 * uniforms.size.x, 10.0, worldPosChange);
+    var light = drawLight(in.world_pos, uniforms.mouse, vec4<f32>(0.75, 1.0, 0.5, 1.0), dist, 500.0, 10.0, worldPosChange);
     light.a = 1.0;
     _OutsideColor = _OutsideColor * light;
 
@@ -133,14 +137,15 @@ fn main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
 }
 
 fn lightDist(p: vec2<f32>) -> f32 {
-    return length(uniforms.mouse - p) - 10.;
+    let q = wrap(uniforms.mouse - p);
+    return length(q) - 10.;
 }
 
 fn trace(p: vec2<f32>, dir: vec2<f32>, worldPosChange: f32) -> vec4<f32>
 {
     var dl = 0.02;
     var d: vec2<f32> = p + dl * dir;
-    let range = 0.5 * uniforms.size.x;
+    let range = 500.0;
     for(var i: i32 = 0; i < 16; i = i + 1) {
         let h = sceneDist(d);
         let l = lightDist(d) + 1.;
@@ -178,9 +183,6 @@ fn main_gi(in: VertexOutput) -> [[location(0)]] vec4<f32> {
     _InsideColor = mix(_InsideColor, vec4<f32>(.5, .2, 0.0, 1.0), insideField);
 
     var _OutsideColor = vec4<f32>(0.5, 0.5, 0.5, 1.0);
-    let p = in.world_pos + 0.5 * uniforms.size;
-    let grid = smoothStep(2. * worldPosChange, 0., min(abs(p.x % 10. - 5.), abs(p.y % 10. - 5.)));
-    _OutsideColor = mix(_OutsideColor, vec4<f32>(.4, .4, .4, 1.), grid);
     let field = smoothStep(2. * worldPosChange, 0., abs((dist + 10.) % 20. - 10.));
     _OutsideColor = mix(_OutsideColor, vec4<f32>(.3, .3, .3, 1.), field);
     var light = vec4<f32>(0., 0., 0., 1.);
