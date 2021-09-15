@@ -60,6 +60,8 @@ struct State {
     left_pressed: bool,
     right_pressed: bool,
     down_pressed: bool,
+    zoom_in_pressed: bool,
+    zoom_out_pressed: bool,
     start_time: Instant,
 }
 
@@ -248,6 +250,8 @@ impl State {
             left_pressed: false,
             right_pressed: false,
             down_pressed: false,
+            zoom_in_pressed: false,
+            zoom_out_pressed: false,
             start_time,
         }
     }
@@ -272,9 +276,9 @@ impl State {
                 let size = self.size;
                 let normalized_x = position.x as f32 / size.width as f32;
                 let normalized_y = position.y as f32 / size.height as f32;
-                self.mouse_pos = self.renderer.position + Vector2::new(
-                    (normalized_x - 0.5) * self.renderer.view_size.x,
-                    (0.5 - normalized_y) * self.renderer.view_size.y
+                self.mouse_pos = Point2::new(
+                    normalized_x - 0.5,
+                    0.5 - normalized_y
                 );
                 true
             }
@@ -291,10 +295,12 @@ impl State {
             WindowEvent::KeyboardInput { input, ..} => {
                 let pressed = input.state == ElementState::Pressed;
                 match input.virtual_keycode {
-                    Some(VirtualKeyCode::Up) => { self.up_pressed = pressed; true},
-                    Some(VirtualKeyCode::Left) => { self.left_pressed = pressed; true },
-                    Some(VirtualKeyCode::Right) => { self.right_pressed = pressed; true },
-                    Some(VirtualKeyCode::Down) => { self.down_pressed = pressed; true },
+                    Some(VirtualKeyCode::W) => { self.up_pressed = pressed; true},
+                    Some(VirtualKeyCode::A) => { self.left_pressed = pressed; true },
+                    Some(VirtualKeyCode::D) => { self.right_pressed = pressed; true },
+                    Some(VirtualKeyCode::S) => { self.down_pressed = pressed; true },
+                    Some(VirtualKeyCode::Z) => { self.zoom_in_pressed = pressed; true },
+                    Some(VirtualKeyCode::X) => { self.zoom_out_pressed = pressed; true },
                     _ => false,
                 }
             }
@@ -310,8 +316,11 @@ impl State {
         if self.right_pressed { d += Vector2::unit_x(); }
         if self.down_pressed { d += -Vector2::unit_y(); }
         d *= 0.2 * self.renderer.view_size.x * frame_time;
+        let mut z = 1.0;
+        if self.zoom_in_pressed { z *= 0.5f32.powf(frame_time); }
+        if self.zoom_out_pressed { z /= 0.5f32.powf(frame_time); }
         self.renderer.position = wrap(self.renderer.position + d);
-        self.mouse_pos = wrap(self.mouse_pos + d);
+        self.renderer.view_size *= z;
         let present_mode = self.gui.present_mode();
         if present_mode != self.config.present_mode {
             self.config.present_mode = present_mode;
@@ -320,7 +329,8 @@ impl State {
         self.uniforms.translate = [self.renderer.position.x, self.renderer.position.y];
         self.uniforms.view_size = [self.renderer.view_size.x, self.renderer.view_size.y];
         self.uniforms.cursor_size = self.gui.cursor_size();
-        self.uniforms.mouse = [self.mouse_pos.x, self.mouse_pos.y];
+        let mouse_world_pos = wrap(self.renderer.position + self.mouse_pos.to_vec().mul_element_wise(self.renderer.view_size));
+        self.uniforms.mouse = [mouse_world_pos.x, mouse_world_pos.y];
         self.queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[self.uniforms]));
         if self.mouse_pressed {
             self.sdf.add(
