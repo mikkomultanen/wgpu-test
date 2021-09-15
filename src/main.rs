@@ -22,7 +22,7 @@ struct Uniforms {
 }
 
 const WINDOW_SIZE: winit::dpi::LogicalSize<u32> = winit::dpi::LogicalSize::new(640, 640);
-const RENDERER_SIZE: Vector2<u32> = Vector2::new(640, 640);
+const RENDERER_SCALE: f32 = 0.5;
 const WORLD_SIZE: Vector2<f32> = Vector2::new(1000.0, 1000.0);
 const SDF_SIZE: u32 = 1024;
 
@@ -53,7 +53,6 @@ struct State {
     gui: gui::GUI,
     sdf: sdf::SDF,
     renderer: renderer::Renderer,
-    renderer_bind_group: wgpu::BindGroup,
     mouse_pos: Point2<f32>,
     mouse_pressed: bool,
     up_pressed: bool,
@@ -132,56 +131,12 @@ impl State {
 
         let sdf = sdf::SDF::new(SDF_SIZE, WORLD_SIZE, &device, &queue);
 
-        let renderer = renderer::Renderer::new(RENDERER_SIZE, WORLD_SIZE, &device, &sdf.view, &sdf.sampler);
-
-        let renderer_texture_bind_group_layout = device.create_bind_group_layout(
-            &wgpu::BindGroupLayoutDescriptor {
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            multisampled: false,
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler {
-                            comparison: false,
-                            filtering: true,
-                        },
-                        count: None,
-                    },
-                ],
-                label: Some("renderer_texture_bind_group_layout"),
-            }
-        );
-
-        let renderer_bind_group = device.create_bind_group(
-            &wgpu::BindGroupDescriptor {
-                layout: &renderer_texture_bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&renderer.view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&renderer.sampler),
-                    }
-                ],
-                label: Some("renderer_bind_group"),
-            }
-        );
+        let renderer = renderer::Renderer::new(Vector2::new(size.width as f32 * RENDERER_SCALE, size.height as f32 * RENDERER_SCALE), WORLD_SIZE, &device, &sdf.view, &sdf.sampler);
 
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[&uniform_bind_group_layout, &renderer_texture_bind_group_layout],
+                bind_group_layouts: &[&uniform_bind_group_layout, &renderer.view_bind_group_layout],
                 push_constant_ranges: &[],
             });
 
@@ -243,7 +198,6 @@ impl State {
             gui,
             sdf,
             renderer,
-            renderer_bind_group,
             mouse_pos: Point2::origin(),
             mouse_pressed: false,
             up_pressed: false,
@@ -263,6 +217,7 @@ impl State {
             self.scale_factor = new_scale_factor;
             self.config.width = new_size.width;
             self.config.height = new_size.height;
+            self.renderer.resize(Vector2::new(new_size.width as f32 * RENDERER_SCALE, new_size.height as f32 * RENDERER_SCALE), &self.device);
             self.surface.configure(&self.device, &self.config);
         }
     }
@@ -383,7 +338,7 @@ impl State {
             });
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
-            render_pass.set_bind_group(1, &self.renderer_bind_group, &[]);
+            render_pass.set_bind_group(1, &self.renderer.view_bind_group, &[]);
             render_pass.draw(0..3, 0..1);
         }
         
@@ -406,7 +361,6 @@ fn main() {
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
     .with_title("WGPU test")
-    .with_resizable(false)
     .with_inner_size(WINDOW_SIZE)
     .build(&event_loop).unwrap();
 
