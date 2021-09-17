@@ -4,40 +4,16 @@ mod renderer;
 
 use cgmath::*;
 use std::time::Instant;
-use wgpu::util::DeviceExt;
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
     window::{Window, WindowBuilder}
 };
 
-#[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Zeroable, bytemuck::Pod)]
-struct Uniforms {
-    pub translate: [f32; 2],
-    pub view_size: [f32; 2],
-    pub world_size: [f32; 2],
-    pub mouse: [f32; 2],
-    pub cursor_size: f32,
-}
-
 const WINDOW_SIZE: winit::dpi::LogicalSize<u32> = winit::dpi::LogicalSize::new(640, 640);
 const RENDERER_SCALE: f32 = 0.5;
 const WORLD_SIZE: Vector2<f32> = Vector2::new(1000.0, 1000.0);
 const SDF_SIZE: u32 = 1024;
-
-impl Default for Uniforms {
-    fn default() -> Uniforms {
-        Uniforms {
-            translate: [0.0, 0.0],
-            view_size: [WORLD_SIZE.x, WORLD_SIZE.y],
-            world_size: [WORLD_SIZE.x, WORLD_SIZE.y],
-            mouse: [0.0, 0.0],
-            cursor_size: 20.0,
-        }
-    }
-}
-
 
 struct State {
     surface: wgpu::Surface,
@@ -46,10 +22,6 @@ struct State {
     config: wgpu::SurfaceConfiguration,
     size: winit::dpi::PhysicalSize<u32>,
     scale_factor: f64,
-    render_pipeline: wgpu::RenderPipeline,
-    uniforms: Uniforms,
-    uniform_buffer: wgpu::Buffer,
-    uniform_bind_group: wgpu::BindGroup,
     gui: gui::GUI,
     sdf: sdf::SDF,
     renderer: renderer::Renderer,
@@ -61,7 +33,6 @@ struct State {
     down_pressed: bool,
     zoom_in_pressed: bool,
     zoom_out_pressed: bool,
-    start_time: Instant,
 }
 
 impl State {
@@ -89,86 +60,9 @@ impl State {
 
         let surface_format = surface.get_preferred_format(&adapter).unwrap();
 
-        let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
-            label: Some("Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
-        });
-
-        let uniforms = Uniforms::default();
-        
-        let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Uniform Buffer"),
-            contents: bytemuck::cast_slice(&[uniforms]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            });
-
-        let uniform_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("uniform_bind_group_layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                    count: None,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                }
-            ]
-        });
-
-        let uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &uniform_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: uniform_buffer.as_entire_binding(),
-                }
-            ],
-            label: Some("uniform_bind_group"),
-        });
-
         let sdf = sdf::SDF::new(SDF_SIZE, WORLD_SIZE, &device, &queue);
 
-        let renderer = renderer::Renderer::new(Vector2::new(size.width as f32 * RENDERER_SCALE, size.height as f32 * RENDERER_SCALE), WORLD_SIZE, &device, &sdf.view, &sdf.sampler);
-
-        let render_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[&uniform_bind_group_layout, &renderer.lightmap_bind_group_layout],
-                push_constant_ranges: &[],
-            });
-
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Render Pipeline"),
-            layout: Some(&render_pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: "main",
-                buffers: &[],
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: "main",
-                targets: &[surface_format.into()],
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
-                polygon_mode: wgpu::PolygonMode::Fill,
-                clamp_depth: false,
-                conservative: false,
-            },
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState {
-                count: 1,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
-        });
+        let renderer = renderer::Renderer::new(Vector2::new(size.width as f32 * RENDERER_SCALE, size.height as f32 * RENDERER_SCALE), WORLD_SIZE, &device, &sdf.view, &sdf.sampler, &surface_format);
 
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -182,8 +76,6 @@ impl State {
 
         let gui = gui::GUI::new(window, &device, &surface_format);
 
-        let start_time = Instant::now();
-
         Self {
             surface,
             device,
@@ -191,10 +83,6 @@ impl State {
             config,
             size,
             scale_factor,
-            render_pipeline,
-            uniforms,
-            uniform_buffer,
-            uniform_bind_group,
             gui,
             sdf,
             renderer,
@@ -206,7 +94,6 @@ impl State {
             down_pressed: false,
             zoom_in_pressed: false,
             zoom_out_pressed: false,
-            start_time,
         }
     }
 
@@ -276,34 +163,14 @@ impl State {
         if self.zoom_out_pressed { z /= 0.5f32.powf(frame_time); }
         self.renderer.position = wrap(self.renderer.position + d);
         self.renderer.view_size *= z;
+    }
+
+    fn render(&mut self) -> Result<(), String> {
         let present_mode = self.gui.present_mode();
         if present_mode != self.config.present_mode {
             self.config.present_mode = present_mode;
             self.surface.configure(&self.device, &self.config);
         }
-        self.uniforms.translate = [self.renderer.position.x, self.renderer.position.y];
-        self.uniforms.view_size = [self.renderer.view_size.x, self.renderer.view_size.y];
-        self.uniforms.cursor_size = self.gui.cursor_size();
-        let mouse_world_pos = wrap(self.renderer.position + self.mouse_pos.to_vec().mul_element_wise(self.renderer.view_size));
-        self.uniforms.mouse = [mouse_world_pos.x, mouse_world_pos.y];
-        self.queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[self.uniforms]));
-        if self.mouse_pressed {
-            self.sdf.add(
-                self.uniforms.mouse, 
-                self.uniforms.cursor_size, 
-                &self.device, 
-                &self.queue
-            );
-        }
-        self.renderer.update(
-            self.uniforms.mouse, 
-            self.start_time.elapsed().as_secs_f32(), 
-            &self.device, 
-            &self.queue
-        );
-    }
-
-    fn render(&mut self) -> Result<(), String> {
         let frame = self
             .surface
             .get_current_frame()
@@ -316,31 +183,23 @@ impl State {
             label: Some("Render Encoder"),
         });
 
-        {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Render Pass"),
-                color_attachments: &[
-                    wgpu::RenderPassColorAttachment {
-                        view: &view,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color {
-                                r: 0.1,
-                                g: 0.2,
-                                b: 0.3,
-                                a: 1.0,
-                            }),
-                            store: true,
-                        }
-                    }
-                ],
-                depth_stencil_attachment: None,
-            });
-            render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
-            render_pass.set_bind_group(1, &self.renderer.lightmap_bind_group, &[]);
-            render_pass.draw(0..3, 0..1);
+        let mouse_world_pos = wrap(self.renderer.position + self.mouse_pos.to_vec().mul_element_wise(self.renderer.view_size));
+        let cursor_size = self.gui.cursor_size();
+        
+        if self.mouse_pressed {
+            self.sdf.add(
+                mouse_world_pos, 
+                cursor_size, 
+                &self.queue,
+                &mut encoder,
+            );
         }
+
+        self.renderer.update_uniforms(
+            mouse_world_pos,
+            cursor_size,
+        );
+        self.renderer.render(&mut self.queue, &mut encoder, &view);
         
         self.gui.render(&mut self.device, &mut self.queue, &mut encoder, &view);
 

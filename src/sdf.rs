@@ -1,3 +1,4 @@
+use cgmath::*;
 use wgpu::util::DeviceExt;
 
 #[repr(C)]
@@ -182,14 +183,10 @@ impl SDF {
         }
     }
 
-    pub fn add(&mut self, mouse: [f32; 2], cursor_size: f32, device: &wgpu::Device, queue: &wgpu::Queue) {
-        self.uniforms.mouse = mouse;
+    pub fn add(&mut self, mouse: Point2<f32>, cursor_size: f32, queue: &wgpu::Queue, encoder: &mut wgpu::CommandEncoder) {
+        self.uniforms.mouse = [mouse.x, mouse.y];
         self.uniforms.cursor_size = cursor_size;
         queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[self.uniforms]));
-
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("SDF Encoder"),
-        });
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -210,7 +207,5 @@ impl SDF {
             render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
             render_pass.draw(0..3, 0..1);
         }
-        
-        queue.submit(std::iter::once(encoder.finish()));
     }
 }

@@ -2,9 +2,10 @@
 struct Uniforms {
     translate: vec2<f32>;
     view_size: vec2<f32>;
-    mouse: vec2<f32>;
     world_size: vec2<f32>;
     inv_world_size: vec2<f32>;
+    mouse: vec2<f32>;
+    cursor_size: f32;
     time: f32;
 };
 
