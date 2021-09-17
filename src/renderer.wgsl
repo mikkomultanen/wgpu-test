@@ -122,20 +122,9 @@ fn main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
 
     let dist = sceneDist(in.world_pos);
 
-    var _InsideColor = vec4<f32>(1.0, 0.4, 0.0, 1.0);
-    let insideField = smoothStep(2. * worldPosChange, 0., abs((-dist + 5.) % 10. - 5.));
-    _InsideColor = mix(_InsideColor, vec4<f32>(.5, .2, 0.0, 1.0), insideField);
-
-    var _OutsideColor = vec4<f32>(0.5, 0.5, 0.5, 1.0);
-    let field = smoothStep(2. * worldPosChange, 0., abs((dist + 10.) % 20. - 10.));
-    _OutsideColor = mix(_OutsideColor, vec4<f32>(.3, .3, .3, 1.), field);
     var light = drawLight(in.world_pos, uniforms.mouse, vec4<f32>(0.75, 1.0, 0.5, 1.0), dist, 500.0, 10.0, worldPosChange);
     light.a = 1.0;
-    _OutsideColor = _OutsideColor * light;
-
-    let col = mix(_InsideColor, _OutsideColor, clamp(dist / worldPosChange + 0.5, 0.0, 1.0));
-
-    return col;
+    return light;
 }
 
 fn lightDist(p: vec2<f32>) -> f32 {
@@ -178,15 +167,6 @@ let SAMPLES: u32 = 16u;
 fn main_gi(in: VertexOutput) -> [[location(0)]] vec4<f32> {
     let worldPosChange = fwidth(in.world_pos.x);
 
-    let dist = sceneDist(in.world_pos);
-
-    var _InsideColor = vec4<f32>(1.0, 0.4, 0.0, 1.0);
-    let insideField = smoothStep(2. * worldPosChange, 0., abs((-dist + 5.) % 10. - 5.));
-    _InsideColor = mix(_InsideColor, vec4<f32>(.5, .2, 0.0, 1.0), insideField);
-
-    var _OutsideColor = vec4<f32>(0.5, 0.5, 0.5, 1.0);
-    let field = smoothStep(2. * worldPosChange, 0., abs((dist + 10.) % 20. - 10.));
-    _OutsideColor = mix(_OutsideColor, vec4<f32>(.3, .3, .3, 1.), field);
     var light = vec4<f32>(0., 0., 0., 1.);
     for (var i = 0u; i < SAMPLES; i = i + 1u) {
         let t = (f32(i) + random(in.world_pos + f32(i) + uniforms.time)) / f32(SAMPLES) * 2. * 3.1415;
@@ -194,9 +174,6 @@ fn main_gi(in: VertexOutput) -> [[location(0)]] vec4<f32> {
     }
     light = 4. * light / f32(SAMPLES);
     light.a = 1.0;
-    _OutsideColor = _OutsideColor * light;
 
-    let col = mix(_InsideColor, _OutsideColor, clamp(dist / worldPosChange + 0.5, 0.0, 1.0));
-
-    return col;
+    return light;
 }

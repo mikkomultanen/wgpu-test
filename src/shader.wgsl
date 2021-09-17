@@ -37,9 +37,21 @@ fn main([[builtin(vertex_index)]] in_vertex_index: u32) -> VertexOutput {
 // Fragment shader
 
 [[group(1), binding(0)]]
-var t_result: texture_2d<f32>;
+var t_sdf: texture_2d<f32>;
 [[group(1), binding(1)]]
-var s_result: sampler;
+var s_sdf: sampler;
+
+[[group(2), binding(0)]]
+var t_lightmap: texture_2d<f32>;
+[[group(2), binding(1)]]
+var s_lightmap: sampler;
+
+fn sceneDist(world_pos: vec2<f32>) -> f32 {
+    var uv = world_pos * uniforms.inv_world_size;
+    uv.y = -uv.y;
+    uv = uv + 0.5;
+    return textureSample(t_sdf, s_sdf, uv).r;
+}
 
 fn wrap(p: vec2<f32>) -> vec2<f32> 
 {
@@ -58,7 +70,18 @@ fn main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
     let worldPosChange = fwidth(in.world_pos.x);
     let cursorAlpha = smoothStep(_CursorThickness * worldPosChange, 0., abs(mouseDistance - cursorSize));
 
-    let col = textureSample(t_result, s_result, in.uv);
+    let dist = sceneDist(in.world_pos);
+
+    var _InsideColor = vec4<f32>(1.0, 0.4, 0.0, 1.0);
+    let insideField = smoothStep(2. * worldPosChange, 0., abs((-dist + 5.) % 10. - 5.));
+    _InsideColor = mix(_InsideColor, vec4<f32>(.5, .2, 0.0, 1.0), insideField);
+
+    var _OutsideColor = vec4<f32>(0.5, 0.5, 0.5, 1.0);
+    let field = smoothStep(2. * worldPosChange, 0., abs((dist + 10.) % 20. - 10.));
+    _OutsideColor = mix(_OutsideColor, vec4<f32>(.3, .3, .3, 1.), field);
+    _OutsideColor = _OutsideColor * textureSample(t_lightmap, s_lightmap, in.uv);
+
+    let col = mix(_InsideColor, _OutsideColor, clamp(dist / worldPosChange + 0.5, 0.0, 1.0));
 
     return mix(col, _CursorCol, cursorAlpha);
 }

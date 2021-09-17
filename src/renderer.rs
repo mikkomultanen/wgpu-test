@@ -253,7 +253,7 @@ impl Renderer {
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[&uniform_bind_group_layout, &lightmap_bind_group_layout],
+                bind_group_layouts: &[&uniform_bind_group_layout, &sdf_texture_bind_group_layout, &lightmap_bind_group_layout],
                 push_constant_ranges: &[],
             });
 
@@ -323,32 +323,6 @@ impl Renderer {
             label: Some("Renderer result"),
         });
         self.lightmap_view = lightmap_texture.create_view(&wgpu::TextureViewDescriptor::default());
-        self.lightmap_bind_group_layout = device.create_bind_group_layout(
-            &wgpu::BindGroupLayoutDescriptor {
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            multisampled: false,
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler {
-                            comparison: false,
-                            filtering: true,
-                        },
-                        count: None,
-                    },
-                ],
-                label: Some("renderer_texture_bind_group_layout"),
-            }
-        );
 
         self.lightmap_bind_group = device.create_bind_group(
             &wgpu::BindGroupDescriptor {
@@ -428,7 +402,8 @@ impl Renderer {
             });
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
-            render_pass.set_bind_group(1, &self.lightmap_bind_group, &[]);
+            render_pass.set_bind_group(1, &self.sdf_bind_group, &[]);
+            render_pass.set_bind_group(2, &self.lightmap_bind_group, &[]);
             render_pass.draw(0..3, 0..1);
         }
     }

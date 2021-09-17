@@ -20,7 +20,7 @@ pub struct GUI {
 
 fn res_str(size: &winit::dpi::PhysicalSize<u32>, scale_factor: f64) -> String {
     let log_size: winit::dpi::LogicalSize<u32> = size.to_logical(scale_factor);
-    return format!("RES: {}x{}:{}x{}", log_size.width, log_size.height, size.width, size.height);
+    return format!("RES: {}x{} LM: {}x{}", size.width, size.height, log_size.width, log_size.height);
 }
 
 impl GUI {
