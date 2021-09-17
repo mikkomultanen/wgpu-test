@@ -83,7 +83,7 @@ fn softShadow(p: vec2<f32>, lightDir: vec2<f32>, lightDistance: f32, radius: f32
         }
         let y = h*h/(2.0*ph);
         let t = sqrt(h*h-y*y);
-        r = min(r, t/max(0.0,(d + h - y)*k));
+        r = min(r, t/max(0.0,(d - y)*(k + k)));
         ph = h;
         d = d + .5 * h;
     }
@@ -92,7 +92,8 @@ fn softShadow(p: vec2<f32>, lightDir: vec2<f32>, lightDistance: f32, radius: f32
 
 fn wrap(p: vec2<f32>) -> vec2<f32> 
 {
-    return (p + 1.5 * uniforms.world_size) % uniforms.world_size - 0.5 * uniforms.world_size;
+    let s = ceil(abs(p / uniforms.world_size)) + 0.5;
+    return (p + s * uniforms.world_size) % uniforms.world_size - 0.5 * uniforms.world_size;
 }
 
 fn drawLight(p: vec2<f32>, pos: vec2<f32>, color: vec4<f32>, dist: f32, range: f32, radius: f32, pChange: f32) -> vec4<f32>

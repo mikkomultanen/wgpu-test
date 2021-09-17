@@ -351,8 +351,10 @@ impl State {
 }
 
 fn wrap(p: Point2<f32>) -> Point2<f32> {
-    let x = (p.x + 1.5 * WORLD_SIZE.x) % WORLD_SIZE.x - 0.5 * WORLD_SIZE.x;
-    let y = (p.y + 1.5 * WORLD_SIZE.y) % WORLD_SIZE.y - 0.5 * WORLD_SIZE.y;
+    let sx = (p.x / WORLD_SIZE.x).abs().ceil() + 0.5;
+    let x = (p.x + sx * WORLD_SIZE.x) % WORLD_SIZE.x - 0.5 * WORLD_SIZE.x;
+    let sy = (p.y / WORLD_SIZE.y).abs().ceil() + 0.5;
+    let y = (p.y + sy * WORLD_SIZE.y) % WORLD_SIZE.y - 0.5 * WORLD_SIZE.y;
     Point2::new(x, y)
 }
 
