@@ -26,11 +26,11 @@ impl Default for Uniforms {
 }
 
 pub struct Renderer {
-    view: wgpu::TextureView,
-    sampler: wgpu::Sampler,
-    pub view_bind_group_layout: wgpu::BindGroupLayout,
-    pub view_bind_group: wgpu::BindGroup,
-    pipeline: wgpu::RenderPipeline,
+    lightmap_view: wgpu::TextureView,
+    lightmap_sampler: wgpu::Sampler,
+    pub lightmap_bind_group_layout: wgpu::BindGroupLayout,
+    pub lightmap_bind_group: wgpu::BindGroup,
+    lightmap_pipeline: wgpu::RenderPipeline,
     uniforms: Uniforms,
     uniform_buffer: wgpu::Buffer,
     uniform_bind_group: wgpu::BindGroup,
@@ -56,9 +56,9 @@ impl Renderer {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             label: Some("Renderer result"),
         });
-        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let lightmap_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        let lightmap_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: None,
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
@@ -68,7 +68,7 @@ impl Renderer {
             ..Default::default()
         });
 
-        let view_bind_group_layout = device.create_bind_group_layout(
+        let lightmap_bind_group_layout = device.create_bind_group_layout(
             &wgpu::BindGroupLayoutDescriptor {
                 entries: &[
                     wgpu::BindGroupLayoutEntry {
@@ -95,17 +95,17 @@ impl Renderer {
             }
         );
 
-        let view_bind_group = device.create_bind_group(
+        let lightmap_bind_group = device.create_bind_group(
             &wgpu::BindGroupDescriptor {
-                layout: &view_bind_group_layout,
+                layout: &lightmap_bind_group_layout,
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&view),
+                        resource: wgpu::BindingResource::TextureView(&lightmap_view),
                     },
                     wgpu::BindGroupEntry {
                         binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&sampler),
+                        resource: wgpu::BindingResource::Sampler(&lightmap_sampler),
                     }
                 ],
                 label: Some("renderer_view_bind_group"),
@@ -206,7 +206,7 @@ impl Renderer {
                 push_constant_ranges: &[],
             });
 
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        let lightmap_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Render Pipeline"),
             layout: Some(&render_pipeline_layout),
             vertex: wgpu::VertexState {
@@ -244,11 +244,11 @@ impl Renderer {
         let view_size = Vector2::new(world_size.x, world_size.y);
 
         return Self {
-            view,
-            sampler,
-            view_bind_group_layout,
-            view_bind_group,
-            pipeline,
+            lightmap_view,
+            lightmap_sampler,
+            lightmap_bind_group_layout,
+            lightmap_bind_group,
+            lightmap_pipeline,
             uniforms,
             uniform_buffer,
             uniform_bind_group,
@@ -272,8 +272,8 @@ impl Renderer {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             label: Some("Renderer result"),
         });
-        self.view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        self.view_bind_group_layout = device.create_bind_group_layout(
+        self.lightmap_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        self.lightmap_bind_group_layout = device.create_bind_group_layout(
             &wgpu::BindGroupLayoutDescriptor {
                 entries: &[
                     wgpu::BindGroupLayoutEntry {
@@ -300,17 +300,17 @@ impl Renderer {
             }
         );
 
-        self.view_bind_group = device.create_bind_group(
+        self.lightmap_bind_group = device.create_bind_group(
             &wgpu::BindGroupDescriptor {
-                layout: &self.view_bind_group_layout,
+                layout: &self.lightmap_bind_group_layout,
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&self.view),
+                        resource: wgpu::BindingResource::TextureView(&self.lightmap_view),
                     },
                     wgpu::BindGroupEntry {
                         binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&self.sampler),
+                        resource: wgpu::BindingResource::Sampler(&self.lightmap_sampler),
                     }
                 ],
                 label: Some("renderer_view_bind_group"),
@@ -336,7 +336,7 @@ impl Renderer {
                 label: None,
                 color_attachments: &[
                     wgpu::RenderPassColorAttachment {
-                        view: &self.view,
+                        view: &self.lightmap_view,
                         resolve_target: None,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -351,7 +351,7 @@ impl Renderer {
                 ],
                 depth_stencil_attachment: None,
             });
-            render_pass.set_pipeline(&self.pipeline);
+            render_pass.set_pipeline(&self.lightmap_pipeline);
             render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
             render_pass.set_bind_group(1, &self.sdf_bind_group, &[]);
             render_pass.draw(0..3, 0..1);

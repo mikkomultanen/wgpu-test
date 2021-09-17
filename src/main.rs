@@ -136,7 +136,7 @@ impl State {
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[&uniform_bind_group_layout, &renderer.view_bind_group_layout],
+                bind_group_layouts: &[&uniform_bind_group_layout, &renderer.lightmap_bind_group_layout],
                 push_constant_ranges: &[],
             });
 
@@ -338,7 +338,7 @@ impl State {
             });
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
-            render_pass.set_bind_group(1, &self.renderer.view_bind_group, &[]);
+            render_pass.set_bind_group(1, &self.renderer.lightmap_bind_group, &[]);
             render_pass.draw(0..3, 0..1);
         }
         
