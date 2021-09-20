@@ -97,15 +97,19 @@ fn wrap(p: vec2<f32>) -> vec2<f32>
     return (p + s * uniforms.world_size) % uniforms.world_size - 0.5 * uniforms.world_size;
 }
 
-fn drawLight(p: vec2<f32>, pos: vec2<f32>, color: vec4<f32>, dist: f32, range: f32, radius: f32, pChange: f32) -> vec4<f32>
+fn drawLight(p: vec2<f32>, pos: vec2<f32>, color: vec3<f32>, dist: f32, range: f32, radius: f32, pChange: f32) -> vec3<f32>
 {
+    if (dist < 0.) {
+        return vec3<f32>(0., 0., 0.);
+    }
+
     let d = wrap(pos - p);
 	// distance to light
 	let ld = length(d);
 	
 	// out of range
 	if (ld > range) {
-        return vec4<f32>(0., 0., 0., 1.);
+        return vec3<f32>(0., 0., 0.);
     }
 	
 	// shadow and falloff
@@ -116,15 +120,144 @@ fn drawLight(p: vec2<f32>, pos: vec2<f32>, color: vec4<f32>, dist: f32, range: f
     return mix(shad * fall, 4., source) * color;
 }
 
+//----------------------------------------------------------------------------------------
+//  1 out, 1 in...
+fn hash11(v: f32) -> f32
+{
+    var p: f32 = fract(v * .1031);
+    p = p * (p + 33.33);
+    p = p * (p + p);
+    return fract(p);
+}
+
+//----------------------------------------------------------------------------------------
+//  1 out, 2 in...
+fn hash12(p: vec2<f32>) -> f32
+{
+	var p3: vec3<f32> = fract(vec3<f32>(p.xyx) * .1031);
+    p3 = p3 + dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
+}
+
+//----------------------------------------------------------------------------------------
+//  1 out, 3 in...
+//float hash13(vec3 p3)
+//{
+//	p3  = fract(p3 * .1031);
+//    p3 += dot(p3, p3.zyx + 31.32);
+//    return fract((p3.x + p3.y) * p3.z);
+//}
+
+//----------------------------------------------------------------------------------------
+//  2 out, 1 in...
+fn hash21(p: f32) -> vec2<f32>
+{
+	var p3: vec3<f32> = fract(vec3<f32>(p) * vec3<f32>(.1031, .1030, .0973));
+	p3 = p3 + dot(p3, p3.yzx + 33.33);
+    return fract((p3.xx+p3.yz)*p3.zy);
+}
+
+//----------------------------------------------------------------------------------------
+///  2 out, 2 in...
+//vec2 hash22(vec2 p)
+//{
+//	vec3 p3 = fract(vec3(p.xyx) * vec3(.1031, .1030, .0973));
+//    p3 += dot(p3, p3.yzx+33.33);
+//    return fract((p3.xx+p3.yz)*p3.zy);
+//}
+
+//----------------------------------------------------------------------------------------
+///  2 out, 3 in...
+//vec2 hash23(vec3 p3)
+//{
+//	p3 = fract(p3 * vec3(.1031, .1030, .0973));
+//    p3 += dot(p3, p3.yzx+33.33);
+//    return fract((p3.xx+p3.yz)*p3.zy);
+//}
+
+//----------------------------------------------------------------------------------------
+//  3 out, 1 in...
+//vec3 hash31(float p)
+//{
+//   vec3 p3 = fract(vec3(p) * vec3(.1031, .1030, .0973));
+//   p3 += dot(p3, p3.yzx+33.33);
+//   return fract((p3.xxy+p3.yzz)*p3.zyx); 
+//}
+
+
+//----------------------------------------------------------------------------------------
+///  3 out, 2 in...
+//vec3 hash32(vec2 p)
+//{
+//	vec3 p3 = fract(vec3(p.xyx) * vec3(.1031, .1030, .0973));
+//    p3 += dot(p3, p3.yxz+33.33);
+//    return fract((p3.xxy+p3.yzz)*p3.zyx);
+//}
+
+//----------------------------------------------------------------------------------------
+///  3 out, 3 in...
+//vec3 hash33(vec3 p3)
+//{
+//	p3 = fract(p3 * vec3(.1031, .1030, .0973));
+//    p3 += dot(p3, p3.yxz+33.33);
+//    return fract((p3.xxy + p3.yxx)*p3.zyx);
+//}
+
+//----------------------------------------------------------------------------------------
+// 4 out, 1 in...
+//vec4 hash41(float p)
+//{
+//	vec4 p4 = fract(vec4(p) * vec4(.1031, .1030, .0973, .1099));
+//    p4 += dot(p4, p4.wzxy+33.33);
+//    return fract((p4.xxyz+p4.yzzw)*p4.zywx);  
+//}
+
+//----------------------------------------------------------------------------------------
+// 4 out, 2 in...
+//vec4 hash42(vec2 p)
+//{
+//	vec4 p4 = fract(vec4(p.xyxy) * vec4(.1031, .1030, .0973, .1099));
+//    p4 += dot(p4, p4.wzxy+33.33);
+//    return fract((p4.xxyz+p4.yzzw)*p4.zywx);
+//}
+
+//----------------------------------------------------------------------------------------
+// 4 out, 3 in...
+//vec4 hash43(vec3 p)
+//{
+//	vec4 p4 = fract(vec4(p.xyzx)  * vec4(.1031, .1030, .0973, .1099));
+//    p4 += dot(p4, p4.wzxy+33.33);
+//    return fract((p4.xxyz+p4.yzzw)*p4.zywx);
+//}
+
+//----------------------------------------------------------------------------------------
+// 4 out, 4 in...
+//vec4 hash44(vec4 p4)
+//{
+//	p4 = fract(p4  * vec4(.1031, .1030, .0973, .1099));
+//    p4 += dot(p4, p4.wzxy+33.33);
+//    return fract((p4.xxyz+p4.yzzw)*p4.zywx);
+//}
+
+
 [[stage(fragment)]]
 fn main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
     let worldPosChange = fwidth(in.world_pos.x);
 
     let dist = sceneDist(in.world_pos);
 
-    var light = drawLight(in.world_pos, uniforms.mouse, vec4<f32>(0.75, 1.0, 0.5, 1.0), dist, 500.0, 10.0, worldPosChange);
-    light.a = 1.0;
-    return light;
+    var col = drawLight(in.world_pos, uniforms.mouse, vec3<f32>(0.75, 1.0, 0.5), dist, 500.0, 10.0, worldPosChange);
+    let LIGHTS = 31;
+    for (var i = 0; i < LIGHTS; i = i + 1) {
+        let pos = hash21(f32(i)) * uniforms.world_size;
+        let radius = 10.;//5. + hash12(pos) * 5.;
+        let range = radius * 50.0;
+        let r = 0.5 * (f32(i) % 2.0);
+        let g = 0.333333 * (f32(i) % 3.0);
+        let b = 0.2 * (f32(i) % 5.0);
+        col = col + drawLight(in.world_pos, pos, vec3<f32>(r, g, b), dist, range, radius, worldPosChange);
+    }
+    return vec4<f32>(col, 1.);
 }
 
 fn lightDist(p: vec2<f32>) -> f32 {
@@ -157,10 +290,6 @@ fn trace(p: vec2<f32>, dir: vec2<f32>, worldPosChange: f32) -> vec4<f32>
     return vec4<f32>(0., 0., 0., 1.);
 }
 
-fn random(p: vec2<f32>) -> f32 {
-    return fract(sin(dot(p, vec2<f32>(12.9898,78.233)))* 43758.5453123);
-}
-
 let SAMPLES: u32 = 16u;
 
 [[stage(fragment)]]
@@ -169,7 +298,7 @@ fn main_gi(in: VertexOutput) -> [[location(0)]] vec4<f32> {
 
     var light = vec4<f32>(0., 0., 0., 1.);
     for (var i = 0u; i < SAMPLES; i = i + 1u) {
-        let t = (f32(i) + random(in.world_pos + f32(i) + uniforms.time)) / f32(SAMPLES) * 2. * 3.1415;
+        let t = (f32(i) + hash12(in.world_pos + f32(i) + uniforms.time)) / f32(SAMPLES) * 2. * 3.1415;
         light = light + trace(in.world_pos, vec2<f32>(cos(t), sin(t)), worldPosChange);
     }
     light = 4. * light / f32(SAMPLES);
