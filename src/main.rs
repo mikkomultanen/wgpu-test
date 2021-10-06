@@ -1,6 +1,7 @@
 mod gui;
 mod sdf;
 mod renderer;
+mod texture;
 
 use cgmath::*;
 use std::time::Instant;
@@ -12,7 +13,7 @@ use winit::{
 
 const WINDOW_SIZE: winit::dpi::LogicalSize<u32> = winit::dpi::LogicalSize::new(640, 640);
 const RENDERER_SCALE: f32 = 0.5;
-const WORLD_SIZE: Vector2<f32> = Vector2::new(1000.0, 1000.0);
+const WORLD_SIZE: Vector2<f32> = Vector2::new(1024.0, 1024.0);
 const SDF_SIZE: u32 = 1024;
 
 struct State {
@@ -49,7 +50,7 @@ impl State {
             },
         ).await.expect("No suitable GPU adapters found on the system!");
 
-        let (device, queue) = adapter.request_device(
+        let (device, mut queue) = adapter.request_device(
             &wgpu::DeviceDescriptor {
                 features: wgpu::Features::empty(),
                 limits: wgpu::Limits::default(),
@@ -62,7 +63,7 @@ impl State {
 
         let sdf = sdf::SDF::new(SDF_SIZE, WORLD_SIZE, &device, &queue);
 
-        let renderer = renderer::Renderer::new(Vector2::new(size.width as f32 * RENDERER_SCALE, size.height as f32 * RENDERER_SCALE), WORLD_SIZE, &device, &sdf.view, &sdf.sampler, &surface_format);
+        let renderer = renderer::Renderer::new(Vector2::new(size.width as f32 * RENDERER_SCALE, size.height as f32 * RENDERER_SCALE), WORLD_SIZE, &device, &mut queue, &sdf.view, &sdf.sampler, &surface_format);
 
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,

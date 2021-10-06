@@ -2,6 +2,8 @@ use cgmath::*;
 use std::time::Instant;
 use wgpu::util::DeviceExt;
 
+use crate::texture;
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Zeroable, bytemuck::Pod)]
 struct Uniforms {
@@ -33,6 +35,8 @@ pub struct Renderer {
     uniform_buffer: wgpu::Buffer,
     uniform_bind_group: wgpu::BindGroup,
     sdf_bind_group: wgpu::BindGroup,
+    blue_noise_textures: Vec<wgpu::BindGroup>,
+    blue_noise_index: usize,
     lightmap_view: wgpu::TextureView,
     lightmap_sampler: wgpu::Sampler,
     lightmap_bind_group_layout: wgpu::BindGroupLayout,
@@ -47,7 +51,7 @@ pub struct Renderer {
 const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
 impl Renderer {
-    pub fn new(resolution: Vector2<f32>, world_size: Vector2<f32>, device: &wgpu::Device, sdf_view: &wgpu::TextureView, sdf_sampler: &wgpu::Sampler, surface_format: &wgpu::TextureFormat) -> Self {
+    pub fn new(resolution: Vector2<f32>, world_size: Vector2<f32>, device: &wgpu::Device, queue: &mut wgpu::Queue, sdf_view: &wgpu::TextureView, sdf_sampler: &wgpu::Sampler, surface_format: &wgpu::TextureFormat) -> Self {
         let mut uniforms = Uniforms::default();
         uniforms.view_size = [world_size.x, world_size.y];
         uniforms.world_size = [world_size.x, world_size.y];
@@ -130,6 +134,41 @@ impl Renderer {
             }
         );
 
+        let blue_noise_bind_group_layout = device.create_bind_group_layout(
+            &wgpu::BindGroupLayoutDescriptor {
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                        },
+                        count: None,
+                    },
+                ],
+                label: None,
+            }
+        );
+
+        let blue_noise_textures = (0..64).into_iter().map(|i| {
+            let img = image::open(format!("assets/blue_noise/LDR_RGBA_{}.png", i)).unwrap();
+            let texture = texture::Texture::from_image(device, queue, &img, None);
+            return device.create_bind_group(
+                &wgpu::BindGroupDescriptor {
+                    layout: &blue_noise_bind_group_layout,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::TextureView(&texture.view),
+                        },
+                    ],
+                    label: None,
+                }
+            );
+        }).collect();
+
         let lightmap_texture = device.create_texture(&wgpu::TextureDescriptor {
             size: wgpu::Extent3d {
                 width: (resolution.x.ceil() as u32).max(16).min(4096),
@@ -207,7 +246,7 @@ impl Renderer {
         let lightmap_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[&uniform_bind_group_layout, &sdf_texture_bind_group_layout],
+                bind_group_layouts: &[&uniform_bind_group_layout, &sdf_texture_bind_group_layout, &blue_noise_bind_group_layout],
                 push_constant_ranges: &[],
             });
 
@@ -296,6 +335,8 @@ impl Renderer {
             uniform_buffer,
             uniform_bind_group,
             sdf_bind_group,
+            blue_noise_textures,
+            blue_noise_index: 0,
             lightmap_view,
             lightmap_sampler,
             lightmap_bind_group_layout,
@@ -353,6 +394,7 @@ impl Renderer {
     }
 
     pub fn render(&mut self, queue: &mut wgpu::Queue, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
+        self.blue_noise_index = (self.blue_noise_index + 1) % self.blue_noise_textures.len();
         queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[self.uniforms]));
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -377,6 +419,7 @@ impl Renderer {
             render_pass.set_pipeline(&self.lightmap_pipeline);
             render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
             render_pass.set_bind_group(1, &self.sdf_bind_group, &[]);
+            render_pass.set_bind_group(2, &self.blue_noise_textures[self.blue_noise_index], &[]);
             render_pass.draw(0..3, 0..1);
         }
 
