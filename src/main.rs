@@ -1,7 +1,6 @@
 mod gui;
 mod sdf;
 mod renderer;
-mod texture;
 
 use cgmath::*;
 use std::time::Instant;
