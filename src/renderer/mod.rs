@@ -1,11 +1,14 @@
 mod light_map;
 mod texture;
+pub mod light;
 
 use cgmath::*;
 use std::time::Instant;
 use wgpu::util::DeviceExt;
 
 use light_map::LightMapRenderer;
+
+use crate::renderer::light::{LightData, LightsConfig};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Zeroable, bytemuck::Pod)]
@@ -37,6 +40,9 @@ pub struct Renderer {
     uniforms: Uniforms,
     uniform_buffer: wgpu::Buffer,
     uniform_bind_group: wgpu::BindGroup,
+    lights_buffer: wgpu::Buffer,
+    lights_config_buffer: wgpu::Buffer,
+    lights_bind_group: wgpu::BindGroup,
     sdf_bind_group: wgpu::BindGroup,
     light_map_renderer: LightMapRenderer,
     lightmap_bind_group_layout: wgpu::BindGroupLayout,
@@ -131,7 +137,63 @@ impl Renderer {
             }
         );
 
-        let light_map_renderer = LightMapRenderer::new(resolution, device, queue, &uniform_bind_group_layout, &sdf_bind_group_layout);
+        let initial_lights_data = vec![LightData::default(); 1024 as usize];
+        let lights_config = LightsConfig { num_lights: 0, };
+
+        let lights_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: None,
+            contents: bytemuck::cast_slice(&initial_lights_data),
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST
+        });
+
+        let lights_config_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: None,
+            contents: bytemuck::cast_slice(&[lights_config]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            });
+
+        let lights_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    count: None,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    count: None,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                },
+            ]
+        });
+
+        let lights_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &lights_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: lights_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: lights_config_buffer.as_entire_binding(),
+                },
+            ],
+            label: None,
+        });
+
+        let light_map_renderer = LightMapRenderer::new(resolution, device, queue, &uniform_bind_group_layout, &sdf_bind_group_layout, &lights_bind_group_layout);
 
         let lightmap_bind_group_layout = device.create_bind_group_layout(
             &wgpu::BindGroupLayoutDescriptor {
@@ -227,6 +289,9 @@ impl Renderer {
             uniforms,
             uniform_buffer,
             uniform_bind_group,
+            lights_buffer,
+            lights_config_buffer,
+            lights_bind_group,
             sdf_bind_group,
             light_map_renderer,
             lightmap_bind_group_layout,
@@ -268,8 +333,13 @@ impl Renderer {
         self.uniforms.time = self.start_time.elapsed().as_secs_f32();
     }
 
+    pub fn update_lights(&mut self, queue: &mut wgpu::Queue, lights: &Vec<LightData>) {
+        queue.write_buffer(&self.lights_buffer, 0, bytemuck::cast_slice(lights));
+        queue.write_buffer(&self.lights_config_buffer, 0, bytemuck::cast_slice(&[LightsConfig { num_lights: lights.len() as u32 }]));
+    }
+
     pub fn render(&mut self, queue: &mut wgpu::Queue, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
-        self.light_map_renderer.render(queue, encoder, &self.uniform_bind_group, &self.sdf_bind_group);
+        self.light_map_renderer.render(queue, encoder, &self.uniform_bind_group, &self.sdf_bind_group, &self.lights_bind_group);
         queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[self.uniforms]));
         {   
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

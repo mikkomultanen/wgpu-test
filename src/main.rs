@@ -9,6 +9,7 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::{Window, WindowBuilder}
 };
+use renderer::light::LightData;
 
 const WINDOW_SIZE: winit::dpi::LogicalSize<u32> = winit::dpi::LogicalSize::new(640, 640);
 const RENDERER_SCALE: f32 = 0.5;
@@ -25,6 +26,7 @@ struct State {
     gui: gui::GUI,
     sdf: sdf::SDF,
     renderer: renderer::Renderer,
+    lights: Vec<LightData>,
     mouse_pos: Point2<f32>,
     mouse_pressed: bool,
     up_pressed: bool,
@@ -64,6 +66,9 @@ impl State {
 
         let renderer = renderer::Renderer::new(Vector2::new(size.width as f32 * RENDERER_SCALE, size.height as f32 * RENDERER_SCALE), WORLD_SIZE, &device, &mut queue, &sdf.view, &sdf.sampler, &surface_format);
 
+        let mut lights = Vec::new();
+        lights.push(LightData::new([1., 1., 1.], [0., 0.], 10., 0.5 * WORLD_SIZE.x));
+
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: surface_format,
@@ -86,6 +91,7 @@ impl State {
             gui,
             sdf,
             renderer,
+            lights,
             mouse_pos: Point2::origin(),
             mouse_pressed: false,
             up_pressed: false,
@@ -185,7 +191,10 @@ impl State {
 
         let mouse_world_pos = wrap(self.renderer.position + self.mouse_pos.to_vec().mul_element_wise(self.renderer.view_size));
         let cursor_size = self.gui.cursor_size();
-        
+        {
+            self.lights[0].position = [mouse_world_pos.x, mouse_world_pos.y];
+        }
+
         if self.mouse_pressed {
             self.sdf.add(
                 mouse_world_pos, 
@@ -199,6 +208,7 @@ impl State {
             mouse_world_pos,
             cursor_size,
         );
+        self.renderer.update_lights(&mut self.queue, &self.lights);
         self.renderer.render(&mut self.queue, &mut encoder, &view);
         
         self.gui.render(&mut self.device, &mut self.queue, &mut encoder, &view);

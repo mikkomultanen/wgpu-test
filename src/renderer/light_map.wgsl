@@ -159,7 +159,28 @@ var t_sdf: texture_2d<f32>;
 [[group(1), binding(1)]]
 var s_sdf: sampler;
 
-[[group(2), binding(0)]]
+struct LightData {
+    color: vec4<f32>;
+    position: vec2<f32>;
+    radius: f32;
+    range: f32;
+};
+
+[[block]] 
+struct LightsBuffer {
+    lights: array<LightData>;
+};
+[[group(2), binding(0)]] 
+var<storage, read> lightsBuffer: LightsBuffer;
+
+[[block]] 
+struct LightsConfig {
+  numLights : u32;
+};
+[[group(2), binding(1)]] 
+var<uniform> lightsConfig: LightsConfig;
+
+[[group(3), binding(0)]]
 var t_blue_noise: texture_2d<f32>;
 
 fn sceneDist(world_pos: vec2<f32>) -> f32 {
@@ -325,17 +346,10 @@ fn main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
 
     let dist = sceneDist(in.world_pos);
 
-    var col = traceLight(in.position.xy, in.world_pos, uniforms.mouse, vec3<f32>(0.75, 1.0, 0.5), dist, 500.0, .5 * uniforms.cursor_size, worldPosChange);
-    let LIGHTS = 32;
-    for (var i = 0; i < LIGHTS; i = i + 1) {
-        let pos = hash21(f32(i)) * uniforms.world_size;
-        let radius = 10.;//5. + hash12(pos) * 5.;
-        let range = radius * 50.0;
-        let r = 0.5 * (f32(i) % 2.0);
-        let g = 0.333333 * (f32(i) % 3.0);
-        let b = 0.2 * (f32(i) % 5.0);
-        //col = col + drawLight(in.world_pos, pos, vec3<f32>(r, g, b), dist, range, radius, worldPosChange);
-        col = col + traceLight(in.position.xy, in.world_pos, pos, vec3<f32>(r, g, b), dist, range, radius, worldPosChange);
+    var col = vec3<f32>(0., 0., 0.);
+    for (var i = 0u32; i < lightsConfig.numLights; i = i + 1u32) {
+        let light = lightsBuffer.lights[i];
+        col = col + traceLight(in.position.xy, in.world_pos, light.position, light.color.rgb, dist, light.range, light.radius, worldPosChange);
     }
     return vec4<f32>(col, 1.);
 }
