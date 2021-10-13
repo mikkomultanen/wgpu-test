@@ -27,6 +27,13 @@ impl LightData {
             range,
         }
     }
+
+    pub fn update(&mut self, color: [f32; 3], position: [f32; 2], radius: f32, range: f32) {
+        self.color = [color[0], color[1], color[2], 0.0];
+        self.position = position;
+        self.radius = radius;
+        self.range = range;
+    }
 }
 
 #[repr(C)]

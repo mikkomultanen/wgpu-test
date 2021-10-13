@@ -35,6 +35,7 @@ struct State {
     down_pressed: bool,
     zoom_in_pressed: bool,
     zoom_out_pressed: bool,
+    add_light_pressed: bool,
 }
 
 impl State {
@@ -67,7 +68,7 @@ impl State {
         let renderer = renderer::Renderer::new(Vector2::new(size.width as f32 * RENDERER_SCALE, size.height as f32 * RENDERER_SCALE), WORLD_SIZE, &device, &mut queue, &sdf.view, &sdf.sampler, &surface_format);
 
         let mut lights = Vec::new();
-        lights.push(LightData::new([1., 1., 1.], [0., 0.], 10., 0.5 * WORLD_SIZE.x));
+        lights.push(LightData::new([1., 1., 1.], [0., 0.], 10., 10. / 40. * 0.5 * WORLD_SIZE.x));
 
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -79,7 +80,8 @@ impl State {
 
         surface.configure(&device, &config);
 
-        let gui = gui::GUI::new(window, &device, &surface_format);
+        let mut gui = gui::GUI::new(window, &device, &surface_format);
+        gui.update_lights(lights.len());
 
         Self {
             surface,
@@ -100,6 +102,7 @@ impl State {
             down_pressed: false,
             zoom_in_pressed: false,
             zoom_out_pressed: false,
+            add_light_pressed: false,
         }
     }
 
@@ -149,6 +152,7 @@ impl State {
                     Some(VirtualKeyCode::S) => { self.down_pressed = pressed; true },
                     Some(VirtualKeyCode::Z) => { self.zoom_in_pressed = pressed; true },
                     Some(VirtualKeyCode::X) => { self.zoom_out_pressed = pressed; true },
+                    Some(VirtualKeyCode::L) => { self.add_light_pressed = pressed; true },
                     _ => false,
                 }
             }
@@ -169,6 +173,14 @@ impl State {
         if self.zoom_out_pressed { z /= 0.5f32.powf(frame_time); }
         self.renderer.position = wrap(self.renderer.position + d);
         self.renderer.view_size *= z;
+
+        if self.add_light_pressed {
+            self.add_light_pressed = false;
+            if self.lights.len() < renderer::MAX_LIGHTS {
+                self.lights.push(self.lights[0].clone());
+                self.gui.update_lights(self.lights.len());
+            }
+        }
     }
 
     fn render(&mut self) -> Result<(), String> {
@@ -190,10 +202,13 @@ impl State {
         });
 
         let mouse_world_pos = wrap(self.renderer.position + self.mouse_pos.to_vec().mul_element_wise(self.renderer.view_size));
-        let cursor_size = self.gui.cursor_size();
-        {
-            self.lights[0].position = [mouse_world_pos.x, mouse_world_pos.y];
-        }
+        let cursor_size = self.gui.cursor_size;
+        self.lights[0].update(
+            self.gui.light_color(), 
+            [mouse_world_pos.x, mouse_world_pos.y],
+            self.gui.light_radius,
+            (self.gui.light_range * 0.5 * WORLD_SIZE.x).max(self.gui.light_radius),
+        );
 
         if self.mouse_pressed {
             self.sdf.add(

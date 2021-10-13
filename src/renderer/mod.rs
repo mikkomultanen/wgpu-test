@@ -10,6 +10,8 @@ use light_map::LightMapRenderer;
 
 use crate::renderer::light::{LightData, LightsConfig};
 
+pub const MAX_LIGHTS: usize = 1024;
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Zeroable, bytemuck::Pod)]
 struct Uniforms {
@@ -137,7 +139,7 @@ impl Renderer {
             }
         );
 
-        let initial_lights_data = vec![LightData::default(); 1024 as usize];
+        let initial_lights_data = vec![LightData::default(); MAX_LIGHTS];
         let lights_config = LightsConfig { num_lights: 0, };
 
         let lights_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {

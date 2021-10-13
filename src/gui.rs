@@ -12,10 +12,16 @@ pub struct GUI {
     platform: Platform,
     rpass: RenderPass,
     start_time: Instant,
-    cursor_size: f32,
+    pub cursor_size: f32,
+    light_hue: f32,
+    light_saturation: f32,
+    light_intensity: f32,
+    pub light_radius: f32,
+    pub light_range: f32,
     v_sync: bool,
     fps_str: String,
     res_str: String,
+    lights_str: String,
 }
 
 fn res_str(size: &winit::dpi::PhysicalSize<u32>, scale_factor: f64) -> String {
@@ -31,27 +37,29 @@ impl GUI {
         let platform = Platform::new(PlatformDescriptor {
             physical_width: size.width as u32,
             physical_height: size.height as u32,
-            scale_factor: scale_factor,
+            scale_factor,
             font_definitions: egui::FontDefinitions::default(),
             style: Default::default(),
         });    
 
         let rpass = RenderPass::new(&device, *surface_format, 1);
 
-        let start_time = Instant::now();
-
-        let cursor_size = 20.0;
-
         return Self {
             size,
             scale_factor,
             platform,
             rpass,
-            start_time,
-            cursor_size,
+            start_time: Instant::now(),
+            cursor_size: 20.0,
+            light_hue: 0.0,
+            light_saturation: 0.0,
+            light_intensity: 1.0,
+            light_radius: 10.0,
+            light_range: 1.0,
             v_sync: true,
             fps_str: format!("FPS: -"),
             res_str: res_str(&size, scale_factor),
+            lights_str: format!("LIGHTS: -"),
         }
     }
 
@@ -74,6 +82,10 @@ impl GUI {
         self.fps_str = format!("FPS: {:.1}", fps);
     }
 
+    pub fn update_lights(&mut self, num_lights: usize) {
+        self.lights_str = format!("LIGHTS: {}", num_lights);
+    }
+
     pub fn render(&mut self, device: &mut wgpu::Device, queue: &mut wgpu::Queue, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) -> egui::Output {
         self.platform.begin_frame();
 
@@ -88,6 +100,7 @@ impl GUI {
                     ui.add(egui::Checkbox::new(&mut self.v_sync, "VSync"));
                     ui.label(self.fps_str.as_str());
                     ui.label(self.res_str.as_str());
+                    ui.label(self.lights_str.as_str());
                 });
             });
 
@@ -95,6 +108,11 @@ impl GUI {
             .resizable(false)
             .show(&ctx, |ui| {
                 ui.add(egui::Slider::new(&mut self.cursor_size, 5.0..=40.0).text("cursor size"));
+                ui.add(egui::Slider::new(&mut self.light_hue, 0.0..=1.0).text("light hue"));
+                ui.add(egui::Slider::new(&mut self.light_saturation, 0.0..=1.0).text("light saturation"));
+                ui.add(egui::Slider::new(&mut self.light_intensity, 0.0..=10.0).text("light intensity"));
+                ui.add(egui::Slider::new(&mut self.light_radius, 0.0..=40.0).text("light radius"));
+                ui.add(egui::Slider::new(&mut self.light_range, 0.0..=1.0).text("light range"));
             });
         }
 
@@ -121,8 +139,8 @@ impl GUI {
         output
     }
 
-    pub fn cursor_size(&self) -> f32 {
-        self.cursor_size * self.scale_factor as f32
+    pub fn light_color(&self) -> [f32; 3] {
+        return egui::color::rgb_from_hsv((self.light_hue, self.light_saturation, self.light_intensity));
     }
 
     pub fn present_mode(&self) -> wgpu::PresentMode {
