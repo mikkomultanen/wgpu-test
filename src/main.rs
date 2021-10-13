@@ -222,6 +222,7 @@ impl State {
         self.renderer.update_uniforms(
             mouse_world_pos,
             cursor_size,
+            self.gui.exposure,
         );
         self.renderer.update_lights(&mut self.queue, &self.lights);
         self.renderer.render(&mut self.queue, &mut encoder, &view);

@@ -10,7 +10,7 @@ pub struct LightMapRenderer {
     lightmap_pipeline: wgpu::RenderPipeline,
 }
 
-const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
+const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 
 impl LightMapRenderer {
     pub fn new(resolution: Vector2<f32>, device: &wgpu::Device, queue: &mut wgpu::Queue, uniform_bind_group_layout: &wgpu::BindGroupLayout, sdf_bind_group_layout: &wgpu::BindGroupLayout, lights_bind_group_layout: &wgpu::BindGroupLayout) -> Self {

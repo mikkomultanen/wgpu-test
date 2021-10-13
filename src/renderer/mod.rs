@@ -22,6 +22,7 @@ struct Uniforms {
     pub mouse: [f32; 2],
     pub cursor_size: f32,
     pub time: f32,
+    pub exposure: f32,
 }
 
 impl Default for Uniforms {
@@ -34,6 +35,7 @@ impl Default for Uniforms {
             mouse: [0.0, 0.0],
             cursor_size: 0.0,
             time: 0.0,
+            exposure: 1.0,
         }
     }
 }
@@ -327,12 +329,13 @@ impl Renderer {
         self.view_size.x = self.view_size.y * resolution.x / resolution.y;
     }
 
-    pub fn update_uniforms(&mut self, mouse: Point2<f32>, cursor_size: f32) {
+    pub fn update_uniforms(&mut self, mouse: Point2<f32>, cursor_size: f32, exposure: f32) {
         self.uniforms.translate = [self.position.x, self.position.y];
         self.uniforms.view_size = [self.view_size.x, self.view_size.y];
         self.uniforms.mouse = [mouse.x, mouse.y];
         self.uniforms.cursor_size = cursor_size;
         self.uniforms.time = self.start_time.elapsed().as_secs_f32();
+        self.uniforms.exposure = exposure;
     }
 
     pub fn update_lights(&mut self, queue: &mut wgpu::Queue, lights: &Vec<LightData>) {

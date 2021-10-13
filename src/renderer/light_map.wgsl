@@ -127,6 +127,7 @@ struct Uniforms {
     mouse: vec2<f32>;
     cursor_size: f32;
     time: f32;
+    exposure: f32;
 };
 
 [[group(0), binding(0)]]

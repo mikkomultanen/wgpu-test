@@ -18,6 +18,7 @@ pub struct GUI {
     light_intensity: f32,
     pub light_radius: f32,
     pub light_range: f32,
+    pub exposure: f32,
     v_sync: bool,
     fps_str: String,
     res_str: String,
@@ -56,6 +57,7 @@ impl GUI {
             light_intensity: 1.0,
             light_radius: 10.0,
             light_range: 1.0,
+            exposure: 1.0,
             v_sync: true,
             fps_str: format!("FPS: -"),
             res_str: res_str(&size, scale_factor),
@@ -113,6 +115,7 @@ impl GUI {
                 ui.add(egui::Slider::new(&mut self.light_intensity, 0.0..=10.0).text("light intensity"));
                 ui.add(egui::Slider::new(&mut self.light_radius, 0.0..=40.0).text("light radius"));
                 ui.add(egui::Slider::new(&mut self.light_range, 0.0..=1.0).text("light range"));
+                ui.add(egui::Slider::new(&mut self.exposure, 0.0..=10.0).text("exposure"));
             });
         }
 
