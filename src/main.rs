@@ -65,7 +65,11 @@ impl State {
 
         let sdf = sdf::SDF::new(SDF_SIZE, WORLD_SIZE, &device, &queue);
 
-        let renderer = renderer::Renderer::new(Vector2::new(size.width as f32 * RENDERER_SCALE, size.height as f32 * RENDERER_SCALE), WORLD_SIZE, &device, &mut queue, &sdf.view, &sdf.sampler, &surface_format);
+        let renderer_resolution = Vector2::new(
+            ((size.width as f32 * RENDERER_SCALE).ceil() as u32).max(16).min(4096),
+            ((size.height as f32 * RENDERER_SCALE).ceil() as u32).max(16).min(4096),
+        );
+    let renderer = renderer::Renderer::new(renderer_resolution, WORLD_SIZE, &device, &mut queue, &sdf.view, &sdf.sampler, &surface_format);
 
         let mut lights = Vec::new();
         lights.push(LightData::new([1., 1., 1.], [0., 0.], 10., 10. / 40. * 0.5 * WORLD_SIZE.x));
@@ -113,7 +117,11 @@ impl State {
             self.scale_factor = new_scale_factor;
             self.config.width = new_size.width;
             self.config.height = new_size.height;
-            self.renderer.resize(Vector2::new(new_size.width as f32 * RENDERER_SCALE, new_size.height as f32 * RENDERER_SCALE), &self.device);
+            let renderer_resolution = Vector2::new(
+                ((new_size.width as f32 * RENDERER_SCALE).ceil() as u32).max(16).min(4096),
+                ((new_size.height as f32 * RENDERER_SCALE).ceil() as u32).max(16).min(4096),
+            );
+            self.renderer.resize(renderer_resolution, &self.device);
             self.surface.configure(&self.device, &self.config);
         }
     }

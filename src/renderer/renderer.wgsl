@@ -4,6 +4,7 @@ struct Uniforms {
     view_size: vec2<f32>;
     world_size: vec2<f32>;
     inv_world_size: vec2<f32>;
+    pixel_size: vec2<f32>;
     mouse: vec2<f32>;
     cursor_size: f32;
     time: f32;
@@ -47,11 +48,15 @@ var t_lightmap: texture_2d<f32>;
 [[group(2), binding(1)]]
 var s_lightmap: sampler;
 
+fn unpackSdf(v: f32) -> f32 {
+    return v;
+}
+
 fn sceneDist(world_pos: vec2<f32>) -> f32 {
     var uv = world_pos * uniforms.inv_world_size;
     uv.y = -uv.y;
     uv = uv + 0.5;
-    return textureSample(t_sdf, s_sdf, uv).r;
+    return unpackSdf(textureSample(t_sdf, s_sdf, uv).r);
 }
 
 fn wrap(p: vec2<f32>) -> vec2<f32> 
@@ -62,32 +67,28 @@ fn wrap(p: vec2<f32>) -> vec2<f32>
 
 [[stage(fragment)]]
 fn main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
+    var col = textureSample(t_lightmap, s_lightmap, in.uv).rgb;
+
+    // reinhard tone mapping
+    //col = col / (col + 1.0);
+
+    col = vec3<f32>(1., 1., 1.) - exp(-col * uniforms.exposure);
+
+    let worldPosChange = fwidth(in.world_pos.x);
+
+    //let dist = sceneDist(in.world_pos);
+    //let insideField = smoothStep(2. * worldPosChange, 0., abs((-dist + 5.) % 10. - 5.));
+    //let outsideField = smoothStep(2. * worldPosChange, 0., abs((dist + 10.) % 20. - 10.));
+    //let field = min(0.1, max(insideField, outsideField));
+    //col = mix(col, vec3<f32>(1., 1., 1.), field);
+
     let cursorSize = 0.5 * uniforms.cursor_size;
     let mouseDistance = length(wrap(uniforms.mouse - in.world_pos));
 
     let _CursorThickness = 2.0;
     let _CursorCol = vec3<f32>(0., 0., 0.5);
 
-    let worldPosChange = fwidth(in.world_pos.x);
     let cursorAlpha = smoothStep(_CursorThickness * worldPosChange, 0., abs(mouseDistance - cursorSize));
-
-    let dist = sceneDist(in.world_pos);
-
-    var _InsideColor = vec3<f32>(1.0, 0.4, 0.0);
-    let insideField = smoothStep(2. * worldPosChange, 0., abs((-dist + 5.) % 10. - 5.));
-    _InsideColor = mix(_InsideColor, vec3<f32>(.5, .2, 0.0), insideField);
-
-    var _OutsideColor = vec3<f32>(0.5, 0.5, 0.5);
-    let field = smoothStep(2. * worldPosChange, 0., abs((dist + 10.) % 20. - 10.));
-    _OutsideColor = mix(_OutsideColor, vec3<f32>(.3, .3, .3), field);
-    _OutsideColor = _OutsideColor * textureSample(t_lightmap, s_lightmap, in.uv).rgb;
-
-    var col = mix(_InsideColor, _OutsideColor, clamp(dist / worldPosChange + 0.5, 0.0, 1.0));
-
-    // reinhard tone mapping
-    //col = col / (col + 1.0);
-
-    col = vec3<f32>(1., 1., 1.) - exp(-col * uniforms.exposure);
 
     return vec4<f32>(mix(col, _CursorCol, cursorAlpha), 1.0);
 }

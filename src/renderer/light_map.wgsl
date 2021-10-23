@@ -124,6 +124,7 @@ struct Uniforms {
     view_size: vec2<f32>;
     world_size: vec2<f32>;
     inv_world_size: vec2<f32>;
+    pixel_size: vec2<f32>;
     mouse: vec2<f32>;
     cursor_size: f32;
     time: f32;
@@ -184,11 +185,15 @@ var<uniform> lightsConfig: LightsConfig;
 [[group(3), binding(0)]]
 var t_blue_noise: texture_2d<f32>;
 
+fn unpackSdf(v: f32) -> f32 {
+    return v;
+}
+
 fn sceneDist(world_pos: vec2<f32>) -> f32 {
     var uv = world_pos * uniforms.inv_world_size;
     uv.y = -uv.y;
     uv = uv + 0.5;
-    return textureSample(t_sdf, s_sdf, uv).r;
+    return unpackSdf(textureSample(t_sdf, s_sdf, uv).r);
 }
 
 fn hardShadow(p: vec2<f32>, lightDir: vec2<f32>, lightDistance: f32, radius: f32) -> f32 {
@@ -283,7 +288,7 @@ fn blue_noise(p: vec2<f32>) -> vec4<f32> {
 
 fn traceShadow(p_screen: vec2<f32>, p: vec2<f32>, pos: vec2<f32>, lightDir: vec2<f32>, lightDistance: f32, radius: f32) -> f32 {
     if (lightDistance <= radius) {
-        return 1.;
+        return 0.;
     }
     let r2 = radius * radius;
     let a = r2 / lightDistance;
@@ -307,14 +312,14 @@ fn traceShadow(p_screen: vec2<f32>, p: vec2<f32>, pos: vec2<f32>, lightDir: vec2
     for(var i: i32 = 0; i < 32; i = i + 1) {
         let h = sceneDist(lp + d * rayDir);
         if( h < .001) {
-            return 0.;
+            return lld - d - h;
         }            
         d = d + h;
         if(d > lld) {
-            return 1.;
+            return lld - d;
         }
     }
-    return 0.;
+    return lld - d;
 }
 
 fn traceLight(p_screen: vec2<f32>, p: vec2<f32>, pos: vec2<f32>, color: vec3<f32>, dist: f32, range: f32, radius: f32, pChange: f32) -> vec3<f32>
@@ -334,7 +339,7 @@ fn traceLight(p_screen: vec2<f32>, p: vec2<f32>, pos: vec2<f32>, color: vec3<f32
 	
 	// shadow and falloff
     let lightDir = d / max(radius, ld);
-	let shad = traceShadow(p_screen, p, pos, lightDir, ld, radius);
+	let shad = step(traceShadow(p_screen, p, pos, lightDir, ld, radius), 0.);
 	var fall = (range - ld + radius) / range;
 	fall = fall * fall;
 	let source = 1.0 - clamp((ld - radius) / pChange + 0.5, 0.0, 1.0);
@@ -352,7 +357,159 @@ fn main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
         let light = lightsBuffer.lights[i];
         col = col + traceLight(in.position.xy, in.world_pos, light.position, light.color.rgb, dist, light.range, light.radius, worldPosChange);
     }
+
+    let _InsideColor = vec3<f32>(1.0, 0.4, 0.0);
+    let _OutsideColor = vec3<f32>(0.5, 0.5, 0.5);
+    if (dist < 0.) {
+        col = col * _InsideColor;
+    } else {
+        col = col * _OutsideColor;
+    }
+
     return vec4<f32>(col, 1.);
+}
+
+let PI: f32 = 3.14159265359;
+
+fn DistributionGGX(N: vec3<f32>, H: vec3<f32>, roughness: f32, distance: f32, radius: f32) -> f32
+{
+    let a      = roughness*roughness;
+    let aPrime = clamp(radius/(distance * 2.) + a, 0., 1.);
+    let a2     = a*aPrime;
+    let NdotH  = max(dot(N, H), 0.0);
+    let NdotH2 = NdotH*NdotH;
+	
+    let num   = a2;
+    var denom = (NdotH2 * (a2 - 1.0) + 1.0);
+    denom = PI * denom * denom;
+	
+    return num / denom;
+}
+
+fn GeometrySchlickGGX(NdotV: f32, roughness: f32) -> f32
+{
+    let r = (roughness + 1.0);
+    let k = (r*r) / 8.0;
+
+    let num   = NdotV;
+    let denom = NdotV * (1.0 - k) + k;
+	
+    return num / denom;
+}
+
+fn GeometrySmith(N: vec3<f32>, V: vec3<f32>, L: vec3<f32>, roughness: f32) -> f32
+{
+    let NdotV = max(dot(N, V), 0.0);
+    let NdotL = max(dot(N, L), 0.0);
+    let ggx2  = GeometrySchlickGGX(NdotV, roughness);
+    let ggx1  = GeometrySchlickGGX(NdotL, roughness);
+	
+    return ggx1 * ggx2;
+}
+
+fn fresnelSchlick(cosTheta: f32, F0: vec3<f32>) -> vec3<f32>
+{
+    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+
+let V: vec3<f32> = vec3<f32>(0., 0., -1.);
+
+fn shadow_pbr(p_screen: vec2<f32>, p: vec2<f32>, pos: vec2<f32>, radius: f32) -> f32 {
+    let d = wrap(p - pos);
+	// distance to light
+	let ld = length(d);
+	
+	// shadow and falloff
+    let lightDir = d / max(radius, ld);
+	return traceShadow(p_screen, p, pos, lightDir, ld, radius);
+}
+
+[[stage(fragment)]]
+fn main_pbr(in: VertexOutput) -> [[location(0)]] vec4<f32> {
+    let offset = vec3<f32>(0.5 * uniforms.pixel_size.xy, 0.);
+
+    let dist = sceneDist(in.world_pos);
+//    let distX = sceneDist(in.world_pos + offset.xz);
+//    let distY = sceneDist(in.world_pos + offset.zy);
+//    let distN = vec2<f32>((distX - dist) / offset.x, (distY - dist) / offset.y);
+//    let t = clamp(0.5 * dist + 1., 0., 1.);
+//    let N = normalize(vec3<f32>((6. * t * (1. - t)) * distN, -1.));
+//    let WorldPos = vec3<f32>(in.world_pos, 2. * smoothStep(0., 1., t));
+//    let N = normalize(vec3<f32>(((2. * t) * step(1., t) * step(t, 0.)) * distN, -1.));
+//    let WorldPos = vec3<f32>(in.world_pos, 2. * t * t);
+//    let N = mix(normalize(vec3<f32>(distN, -1.)), vec3<f32>(0., 0., -1.), step(-dist, 0.));
+//    let WorldPos = vec3<f32>(in.world_pos, 2. * step(-dist, 0.));
+    let N = vec3<f32>(0., 0., -1.);
+    let WorldPos = vec3<f32>(in.world_pos, 2.);
+
+    var albedo: vec3<f32>;
+    if (dist < 0.) {
+        albedo = vec3<f32>(1.0, 0.4, 0.0);
+    } else {
+        albedo = vec3<f32>(1., 1., 1.);
+    }
+    let metallic = 0.;
+    let roughness = .5;
+    let ao = 1.0;
+
+    var F0 = vec3<f32>(.04, .04, .04); 
+    F0 = mix(F0, albedo, metallic);
+	           
+    // reflectance equation
+    var Lo = vec3<f32>(0., 0., 0.);
+
+    for (var i = 0u32; i < lightsConfig.numLights; i = i + 1u32) {
+        let light = lightsBuffer.lights[i];
+        // calculate per-light radiance
+        let l = vec3<f32>(wrap(light.position - WorldPos.xy), 0. - WorldPos.z);
+
+        let r = reflect(-V, N);
+        let centerToRay = (dot(l, r) * r) - l;
+        let centerToRayLength = length(centerToRay);
+        let closestPoint = l + centerToRay * clamp(light.radius / length(centerToRay), 0., 1.);
+        let L = normalize(closestPoint);
+        let distance = length(closestPoint);
+
+        let effectiveRange = max(light.range - light.radius, 0.);
+        if (distance > effectiveRange) {
+            continue;
+        }
+        //let falloff = pow(clamp(1. - pow(distance/(light.range), 4.), 0., 1.), 2.) / ((distance * distance) + 1.);
+        let falloff = pow((effectiveRange - distance) / effectiveRange, 2.);
+        let distanceToSurface = shadow_pbr(in.position.xy, WorldPos.xy, light.position, light.radius);
+        let shadow = mix(
+            smoothStep(10., 0., distanceToSurface), 
+            step(distanceToSurface, 0.), 
+            step(0., dist)
+        );
+        let radiance = light.color.rgb * shadow * falloff;
+
+        //let attenuation = 1.0 / (distance * distance);
+        //let radiance     = light.color.rgb * attenuation;        
+        let H = normalize(V + L);
+        
+        // cook-torrance brdf
+        let NDF = DistributionGGX(N, H, roughness, distance, light.radius);
+        let G   = GeometrySmith(N, V, L, roughness);      
+        let F   = fresnelSchlick(max(dot(H, V), 0.0), F0);       
+        
+        let kS = F;
+        let kD = (vec3<f32>(1., 1., 1.) - kS) * (1.0 - metallic);
+        
+        let numerator    = NDF * G * F;
+        let denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
+        let specular     = numerator / denominator;  
+            
+        // add to outgoing radiance Lo
+        let NdotL = max(dot(N, L), 0.0);                
+
+        Lo = Lo + (kD * albedo / PI + specular) * radiance * NdotL; 
+    }
+
+    let ambient = vec3<f32>(.0, .0, .0) * albedo * ao;
+    var color: vec3<f32> = ambient + Lo;
+	
+    return vec4<f32>(color, 1.0);
 }
 
 fn lightDist(p: vec2<f32>) -> f32 {

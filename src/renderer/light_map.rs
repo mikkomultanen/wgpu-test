@@ -13,7 +13,7 @@ pub struct LightMapRenderer {
 const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 
 impl LightMapRenderer {
-    pub fn new(resolution: Vector2<f32>, device: &wgpu::Device, queue: &mut wgpu::Queue, uniform_bind_group_layout: &wgpu::BindGroupLayout, sdf_bind_group_layout: &wgpu::BindGroupLayout, lights_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
+    pub fn new(resolution: Vector2<u32>, device: &wgpu::Device, queue: &mut wgpu::Queue, uniform_bind_group_layout: &wgpu::BindGroupLayout, sdf_bind_group_layout: &wgpu::BindGroupLayout, lights_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
         let blue_noise_bind_group_layout = device.create_bind_group_layout(
             &wgpu::BindGroupLayoutDescriptor {
                 entries: &[
@@ -51,8 +51,8 @@ impl LightMapRenderer {
 
         let lightmap_texture = device.create_texture(&wgpu::TextureDescriptor {
             size: wgpu::Extent3d {
-                width: (resolution.x.ceil() as u32).max(16).min(4096),
-                height: (resolution.y.ceil() as u32).max(16).min(4096),
+                width: resolution.x,
+                height: resolution.y,
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
@@ -96,7 +96,7 @@ impl LightMapRenderer {
             },
             fragment: Some(wgpu::FragmentState {
                 module: &lightmap_shader,
-                entry_point: "main",
+                entry_point: "main_pbr",
                 targets: &[wgpu::ColorTargetState {
                     format: TEXTURE_FORMAT,
                     blend: Some(wgpu::BlendState::REPLACE),
@@ -129,11 +129,11 @@ impl LightMapRenderer {
         }
     }
 
-    pub fn resize(&mut self, resolution: Vector2<f32>, device: &wgpu::Device) {
+    pub fn resize(&mut self, resolution: Vector2<u32>, device: &wgpu::Device) {
         let lightmap_texture = device.create_texture(&wgpu::TextureDescriptor {
             size: wgpu::Extent3d {
-                width: (resolution.x.ceil() as u32).max(16).min(4096),
-                height: (resolution.y.ceil() as u32).max(16).min(4096),
+                width: resolution.x,
+                height: resolution.y,
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,

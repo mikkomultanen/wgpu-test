@@ -30,10 +30,18 @@ fn main([[builtin(vertex_index)]] in_vertex_index: u32) -> VertexOutput {
 
 // Fragment shader
 
+fn packSdf(v: f32) -> f32 {
+    return v;
+}
+
+fn unpackSdf(v: f32) -> f32 {
+    return v;
+}
+
 [[stage(fragment)]]
 fn main(in: VertexOutput) -> [[location(0)]] f32 {
     let p = uniforms.mouse - in.world_pos;
     let r = 0.5 * uniforms.cursor_size;
     let q = (p + 1.5 * uniforms.size) % uniforms.size - 0.5 * uniforms.size;
-    return length(q) - r;
+    return packSdf(length(q) - r);
 }

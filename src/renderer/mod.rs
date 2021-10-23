@@ -19,6 +19,7 @@ struct Uniforms {
     pub view_size: [f32; 2],
     pub world_size: [f32; 2],
     pub inv_world_size: [f32; 2],
+    pub pixel_size: [f32; 2],
     pub mouse: [f32; 2],
     pub cursor_size: f32,
     pub time: f32,
@@ -32,6 +33,7 @@ impl Default for Uniforms {
             view_size: [1.0, 1.0],
             world_size: [1.0, 1.0], 
             inv_world_size: [1.0, 1.0],
+            pixel_size: [1.0, 1.0],
             mouse: [0.0, 0.0],
             cursor_size: 0.0,
             time: 0.0,
@@ -58,11 +60,12 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub fn new(resolution: Vector2<f32>, world_size: Vector2<f32>, device: &wgpu::Device, queue: &mut wgpu::Queue, sdf_view: &wgpu::TextureView, sdf_sampler: &wgpu::Sampler, surface_format: &wgpu::TextureFormat) -> Self {
+    pub fn new(resolution: Vector2<u32>, world_size: Vector2<f32>, device: &wgpu::Device, queue: &mut wgpu::Queue, sdf_view: &wgpu::TextureView, sdf_sampler: &wgpu::Sampler, surface_format: &wgpu::TextureFormat) -> Self {
         let mut uniforms = Uniforms::default();
         uniforms.view_size = [world_size.x, world_size.y];
         uniforms.world_size = [world_size.x, world_size.y];
         uniforms.inv_world_size = [1.0 / world_size.x, 1.0 / world_size.y];
+        uniforms.pixel_size = [world_size.x / resolution.x as f32, world_size.y / resolution.y as f32];
 
         let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Uniform Buffer"),
@@ -307,7 +310,7 @@ impl Renderer {
         }
     }
 
-    pub fn resize(&mut self, resolution: Vector2<f32>, device: &wgpu::Device) {
+    pub fn resize(&mut self, resolution: Vector2<u32>, device: &wgpu::Device) {
         self.light_map_renderer.resize(resolution, device);
         self.lightmap_bind_group = device.create_bind_group(
             &wgpu::BindGroupDescriptor {
@@ -326,7 +329,8 @@ impl Renderer {
             }
         );
 
-        self.view_size.x = self.view_size.y * resolution.x / resolution.y;
+        self.view_size.x = self.view_size.y * resolution.x as f32 / resolution.y as f32;
+        self.uniforms.pixel_size = [self.view_size.x / resolution.x as f32, self.view_size.y / resolution.y as f32];
     }
 
     pub fn update_uniforms(&mut self, mouse: Point2<f32>, cursor_size: f32, exposure: f32) {

@@ -28,9 +28,10 @@ pub struct SDF {
     uniform_bind_group: wgpu::BindGroup,
 }
 
+const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R16Float;
+
 impl SDF {
     pub fn new(size: u32, world_size: cgmath::Vector2<f32>, device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
-        let texture_format = wgpu::TextureFormat::R16Float;
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             size: wgpu::Extent3d {
                 width: size,
@@ -40,7 +41,7 @@ impl SDF {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: texture_format,
+            format: TEXTURE_FORMAT,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             label: Some("SDF"),
         });
@@ -142,7 +143,7 @@ impl SDF {
                 module: &shader,
                 entry_point: "main",
                 targets: &[wgpu::ColorTargetState {
-                    format: texture_format,
+                    format: TEXTURE_FORMAT,
                     blend: Some(wgpu::BlendState {
                         color: wgpu::BlendComponent {
                             src_factor: wgpu::BlendFactor::One,
@@ -155,7 +156,7 @@ impl SDF {
                             operation: wgpu::BlendOperation::Min,
                         },
                     }),
-                    write_mask: wgpu::ColorWrites::ALL,
+                    write_mask: wgpu::ColorWrites::RED,
                 }],
             }),
             primitive: wgpu::PrimitiveState {
