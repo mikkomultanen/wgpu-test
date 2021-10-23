@@ -310,7 +310,7 @@ fn traceShadow(p_screen: vec2<f32>, p: vec2<f32>, pos: vec2<f32>, lightDir: vec2
     let lld = length(ld);
     let rayDir = ld / lld;
     for(var i: i32 = 0; i < 32; i = i + 1) {
-        let h = sceneDist(lp + d * rayDir);
+        let h = max(sceneDist(lp + d * rayDir), 0.);
         if( h < .001) {
             return lld - d - h;
         }            
@@ -376,6 +376,8 @@ fn DistributionGGX(N: vec3<f32>, H: vec3<f32>, roughness: f32, distance: f32, ra
     let a      = roughness*roughness;
     let aPrime = clamp(radius/(distance * 2.) + a, 0., 1.);
     let a2     = a*aPrime;
+//    let aPrime = a / clamp(radius/(distance * 2.) + a, 0., 1.);
+//    let a2     = aPrime * aPrime;
     let NdotH  = max(dot(N, H), 0.0);
     let NdotH2 = NdotH*NdotH;
 	
