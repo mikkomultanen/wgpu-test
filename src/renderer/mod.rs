@@ -61,8 +61,11 @@ pub struct Renderer {
 
 impl Renderer {
     pub fn new(resolution: Vector2<u32>, world_size: Vector2<f32>, device: &wgpu::Device, queue: &mut wgpu::Queue, sdf_view: &wgpu::TextureView, sdf_sampler: &wgpu::Sampler, surface_format: &wgpu::TextureFormat) -> Self {
+        let mut view_size = Vector2::new(world_size.x, world_size.y);
+        view_size.x = view_size.y * resolution.x as f32 / resolution.y as f32;
+
         let mut uniforms = Uniforms::default();
-        uniforms.view_size = [world_size.x, world_size.y];
+        uniforms.view_size = [view_size.x, view_size.y];
         uniforms.world_size = [world_size.x, world_size.y];
         uniforms.inv_world_size = [1.0 / world_size.x, 1.0 / world_size.y];
         uniforms.pixel_size = [world_size.x / resolution.x as f32, world_size.y / resolution.y as f32];
@@ -290,7 +293,6 @@ impl Renderer {
 
         let start_time = Instant::now();
         let position = Point2::new(0., 0.);
-        let view_size = Vector2::new(world_size.x, world_size.y);
 
         return Self {
             uniforms,
