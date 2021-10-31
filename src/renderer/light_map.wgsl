@@ -293,7 +293,7 @@ fn traceShadow(p_screen: vec2<f32>, p: vec2<f32>, pos: vec2<f32>, lightDir: vec2
     let r2 = radius * radius;
     let a = r2 / lightDistance;
     let rand = 2. * blue_noise(p_screen).r - 1.;
-    let b = sqrt(r2 - a * a) * rand;
+    let b = sqrt(r2 - a * a) * rand * 0.9999;
 
     let ab = a * lightDir + b * perpendicular(lightDir);
     let ab_d = wrap(p - pos - ab);
