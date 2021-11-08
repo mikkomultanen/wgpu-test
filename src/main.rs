@@ -65,11 +65,12 @@ impl State {
 
         let sdf = sdf::SDF::new(SDF_SIZE, WORLD_SIZE, &device, &queue);
 
-        let renderer_resolution = Vector2::new(
+        let render_resolution = Vector2::new(
             ((size.width as f32 * RENDERER_SCALE).ceil() as u32).max(16).min(4096),
             ((size.height as f32 * RENDERER_SCALE).ceil() as u32).max(16).min(4096),
         );
-    let renderer = renderer::Renderer::new(renderer_resolution, WORLD_SIZE, &device, &mut queue, &sdf.view, &sdf.sampler, &surface_format);
+        let output_resolution = Vector2::new(size.width, size.height);
+        let renderer = renderer::Renderer::new(render_resolution, output_resolution, WORLD_SIZE, &device, &mut queue, &sdf.view, &sdf.sampler, &surface_format);
 
         let mut lights = Vec::new();
         lights.push(LightData::new([1., 1., 1.], [0., 0.], 10., 10. / 40. * 0.5 * WORLD_SIZE.x));
@@ -86,6 +87,7 @@ impl State {
 
         let mut gui = gui::GUI::new(window, &device, &surface_format);
         gui.update_lights(lights.len());
+        gui.update_res(render_resolution, output_resolution);
 
         Self {
             surface,
@@ -117,11 +119,13 @@ impl State {
             self.scale_factor = new_scale_factor;
             self.config.width = new_size.width;
             self.config.height = new_size.height;
-            let renderer_resolution = Vector2::new(
+            let render_resolution = Vector2::new(
                 ((new_size.width as f32 * RENDERER_SCALE).ceil() as u32).max(16).min(4096),
                 ((new_size.height as f32 * RENDERER_SCALE).ceil() as u32).max(16).min(4096),
             );
-            self.renderer.resize(renderer_resolution, &self.device);
+            let output_resolution = Vector2::new(new_size.width, new_size.height);
+            self.renderer.resize(render_resolution, output_resolution, &self.device);
+            self.gui.update_res(render_resolution, output_resolution);
             self.surface.configure(&self.device, &self.config);
         }
     }
@@ -233,7 +237,7 @@ impl State {
             self.gui.exposure,
         );
         self.renderer.update_lights(&mut self.queue, &self.lights);
-        self.renderer.render(&mut self.queue, &mut encoder, &view);
+        self.renderer.render(&mut self.device, &mut self.queue, &mut encoder, &view);
         
         self.gui.render(&mut self.device, &mut self.queue, &mut encoder, &view);
 

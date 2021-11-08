@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+use cgmath::Vector2;
 use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::{Platform, PlatformDescriptor};
 
@@ -25,9 +26,8 @@ pub struct GUI {
     lights_str: String,
 }
 
-fn res_str(size: &winit::dpi::PhysicalSize<u32>, scale_factor: f64) -> String {
-    let log_size: winit::dpi::LogicalSize<u32> = size.to_logical(scale_factor);
-    return format!("RES: {}x{} LM: {}x{}", size.width, size.height, log_size.width, log_size.height);
+fn res_str(render_resolution: Vector2<u32>, output_resolution: Vector2<u32>) -> String {
+    return format!("R: {}x{} O: {}x{}", render_resolution.x, render_resolution.y, output_resolution.x, output_resolution.y);
 }
 
 impl GUI {
@@ -60,7 +60,7 @@ impl GUI {
             exposure: 1.0,
             v_sync: true,
             fps_str: format!("FPS: -"),
-            res_str: res_str(&size, scale_factor),
+            res_str: format!("R. - O: -"),
             lights_str: format!("LIGHTS: -"),
         }
     }
@@ -68,7 +68,6 @@ impl GUI {
     pub fn resize(&mut self, size: &winit::dpi::PhysicalSize<u32>, scale_factor: f64) {
         self.size = *size;
         self.scale_factor = scale_factor;
-        self.res_str = res_str(size, scale_factor);
     }
 
     pub fn input<T>(&mut self, event: &winit::event::Event<T>) -> bool {
@@ -86,6 +85,10 @@ impl GUI {
 
     pub fn update_lights(&mut self, num_lights: usize) {
         self.lights_str = format!("LIGHTS: {}", num_lights);
+    }
+
+    pub fn update_res(&mut self, render_resolution: Vector2<u32>, output_resolution: Vector2<u32>) {
+        self.res_str = res_str(render_resolution, output_resolution);
     }
 
     pub fn render(&mut self, device: &mut wgpu::Device, queue: &mut wgpu::Queue, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) -> egui::Output {

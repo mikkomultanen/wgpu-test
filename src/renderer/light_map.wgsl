@@ -476,7 +476,7 @@ fn main_pbr(in: VertexOutput) -> [[location(0)]] vec4<f32> {
         if (distance > effectiveRange) {
             continue;
         }
-        //let falloff = pow(clamp(1. - pow(distance/(light.range), 4.), 0., 1.), 2.) / ((distance * distance) + 1.);
+        //let falloff = pow(clamp(1. - pow(distance/effectiveRange, 4.), 0., 1.), 2.) / ((distance * distance) + 1.);
         let falloff = pow((effectiveRange - distance) / effectiveRange, 2.);
         let distanceToSurface = shadow_pbr(in.position.xy, WorldPos.xy, light.position, light.radius);
         let shadow = mix(

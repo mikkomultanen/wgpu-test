@@ -6,7 +6,6 @@ pub struct LightMapRenderer {
     blue_noise_textures: Vec<wgpu::BindGroup>,
     blue_noise_index: usize,
     pub lightmap_view: wgpu::TextureView,
-    pub lightmap_sampler: wgpu::Sampler,
     lightmap_pipeline: wgpu::RenderPipeline,
 }
 
@@ -64,16 +63,6 @@ impl LightMapRenderer {
         });
         let lightmap_view = lightmap_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-        let lightmap_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: None,
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            ..Default::default()
-        });
-
         let lightmap_shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
             label: Some("Lightmap shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("light_map.wgsl").into()),
@@ -124,7 +113,6 @@ impl LightMapRenderer {
             blue_noise_textures,
             blue_noise_index: 0,
             lightmap_view,
-            lightmap_sampler,
             lightmap_pipeline,
         }
     }
@@ -146,7 +134,7 @@ impl LightMapRenderer {
         self.lightmap_view = lightmap_texture.create_view(&wgpu::TextureViewDescriptor::default());
     }
 
-    pub fn render(&mut self, _queue: &mut wgpu::Queue, encoder: &mut wgpu::CommandEncoder, uniform_bind_group: &wgpu::BindGroup, sdf_bind_group: &wgpu::BindGroup, lights_bind_group: &wgpu::BindGroup) {
+    pub fn render(&mut self, _device: &wgpu::Device, _queue: &mut wgpu::Queue, encoder: &mut wgpu::CommandEncoder, uniform_bind_group: &wgpu::BindGroup, sdf_bind_group: &wgpu::BindGroup, lights_bind_group: &wgpu::BindGroup) {
         self.blue_noise_index = (self.blue_noise_index + 1) % self.blue_noise_textures.len();
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

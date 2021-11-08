@@ -1,10 +1,12 @@
 use std::num::NonZeroU32;
 
+use cgmath::Vector2;
 use image::GenericImageView;
 
 pub struct Texture {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
+    pub size: wgpu::Extent3d
 }
 
 impl Texture {
@@ -53,6 +55,36 @@ impl Texture {
         Self {
             texture,
             view,
+            size,
+        }
+    }
+
+    pub fn new_intermediate(
+        device: &wgpu::Device,
+        resolution: Vector2<u32>,
+        format: wgpu::TextureFormat,
+    ) -> Self {
+        let size = wgpu::Extent3d {
+            width: resolution.x,
+            height: resolution.y,
+            depth_or_array_layers: 1,
+        };
+        
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::STORAGE_BINDING,
+            label: None,
+        });
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        Self {
+            texture,
+            view,
+            size,
         }
     }
 }
