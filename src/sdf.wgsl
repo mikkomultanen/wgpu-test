@@ -6,7 +6,7 @@ struct Uniforms {
 };
 
 [[group(0), binding(0)]]
-var uniforms: Uniforms;
+var<uniform> uniforms: Uniforms;
 
 // Vertex shader
 

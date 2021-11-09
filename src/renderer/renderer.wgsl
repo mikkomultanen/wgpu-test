@@ -12,7 +12,7 @@ struct Uniforms {
 };
 
 [[group(0), binding(0)]]
-var uniforms: Uniforms;
+var<uniform> uniforms: Uniforms;
 
 // Vertex shader
 
@@ -85,10 +85,10 @@ fn main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
     let cursorSize = 0.5 * uniforms.cursor_size;
     let mouseDistance = length(wrap(uniforms.mouse - in.world_pos));
 
-    let _CursorThickness = 2.0;
-    let _CursorCol = vec3<f32>(0., 0., 0.5);
+    let CursorThickness = 2.0;
+    let CursorCol = vec3<f32>(0., 0., 0.5);
 
-    let cursorAlpha = smoothStep(_CursorThickness * worldPosChange, 0., abs(mouseDistance - cursorSize));
+    let cursorAlpha = smoothStep(CursorThickness * worldPosChange, 0., abs(mouseDistance - cursorSize));
 
-    return vec4<f32>(mix(col, _CursorCol, cursorAlpha), 1.0);
+    return vec4<f32>(mix(col, CursorCol, cursorAlpha), 1.0);
 }

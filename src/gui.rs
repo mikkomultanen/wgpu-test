@@ -122,7 +122,7 @@ impl GUI {
             });
         }
 
-        let (output, paint_commands) = self.platform.end_frame();
+        let (output, paint_commands) = self.platform.end_frame(None);
         let paint_jobs = self.platform.context().tessellate(paint_commands);
 
         let screen_descriptor = ScreenDescriptor {

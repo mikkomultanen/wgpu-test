@@ -48,6 +48,7 @@ impl State {
         let adapter = instance.request_adapter(
             &wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
+                force_fallback_adapter: false,
                 compatible_surface: Some(&surface),
             },
         ).await.expect("No suitable GPU adapters found on the system!");
@@ -203,9 +204,8 @@ impl State {
         }
         let frame = self
             .surface
-            .get_current_frame()
-            .expect("Failed to acquire next swap chain texture")
-            .output;
+            .get_current_texture()
+            .expect("Failed to acquire next swap chain texture");
         let view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
@@ -243,6 +243,8 @@ impl State {
 
         self.queue.submit(std::iter::once(encoder.finish()));
     
+        frame.present();
+        
         Ok(())
     }
 }

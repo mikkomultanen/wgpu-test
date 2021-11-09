@@ -132,7 +132,7 @@ struct Uniforms {
 };
 
 [[group(0), binding(0)]]
-var uniforms: Uniforms;
+var<uniform> uniforms: Uniforms;
 
 // Vertex shader
 
@@ -353,17 +353,17 @@ fn main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
     let dist = sceneDist(in.world_pos);
 
     var col = vec3<f32>(0., 0., 0.);
-    for (var i = 0u32; i < lightsConfig.numLights; i = i + 1u32) {
+    for (var i = 0u; i < lightsConfig.numLights; i = i + 1u) {
         let light = lightsBuffer.lights[i];
         col = col + traceLight(in.position.xy, in.world_pos, light.position, light.color.rgb, dist, light.range, light.radius, worldPosChange);
     }
 
-    let _InsideColor = vec3<f32>(1.0, 0.4, 0.0);
-    let _OutsideColor = vec3<f32>(0.5, 0.5, 0.5);
+    let InsideColor = vec3<f32>(1.0, 0.4, 0.0);
+    let OutsideColor = vec3<f32>(0.5, 0.5, 0.5);
     if (dist < 0.) {
-        col = col * _InsideColor;
+        col = col * InsideColor;
     } else {
-        col = col * _OutsideColor;
+        col = col * OutsideColor;
     }
 
     return vec4<f32>(col, 1.);
@@ -460,7 +460,7 @@ fn main_pbr(in: VertexOutput) -> [[location(0)]] vec4<f32> {
     // reflectance equation
     var Lo = vec3<f32>(0., 0., 0.);
 
-    for (var i = 0u32; i < lightsConfig.numLights; i = i + 1u32) {
+    for (var i = 0u; i < lightsConfig.numLights; i = i + 1u) {
         let light = lightsBuffer.lights[i];
         // calculate per-light radiance
         let l = vec3<f32>(wrap(light.position - WorldPos.xy), 0. - WorldPos.z);
@@ -505,11 +505,12 @@ fn main_pbr(in: VertexOutput) -> [[location(0)]] vec4<f32> {
         // add to outgoing radiance Lo
         let NdotL = max(dot(N, L), 0.0);                
 
-        Lo = Lo + (kD * albedo / PI + specular) * radiance * NdotL; 
+        Lo = Lo + (kD  / PI + specular) * radiance * NdotL; 
     }
 
-    let ambient = vec3<f32>(.0, .0, .0) * albedo * ao;
+    let ambient = vec3<f32>(.0, .0, .0) * ao;
     var color: vec3<f32> = ambient + Lo;
+    color = color * albedo;
 	
     return vec4<f32>(color, 1.0);
 }

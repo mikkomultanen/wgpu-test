@@ -12,7 +12,7 @@ struct Uniforms {
 };
 
 [[group(0), binding(0)]]
-var uniforms: Uniforms;
+var<uniform> uniforms: Uniforms;
 
 [[group(1), binding(0)]]
 var t_colorTexture: texture_2d<f32>;
@@ -25,6 +25,110 @@ var s_historyTexture: sampler;
 
 [[group(2), binding(2)]]
 var t_outputTexture: texture_storage_2d<rgba16float, write>;
+
+var<workgroup> s_color_pq : array<array<vec2<u32>, 19>, 19>;
+var<workgroup> s_motion : array<array<u32, 19>, 19>;
+
+let pq_m1 = 0.1593017578125;
+let pq_m2 = 78.84375;
+let pq_c1 = 0.8359375;
+let pq_c2 = 18.8515625;
+let pq_c3 = 18.6875;
+let pq_C = 10000.0;
+
+fn PQDecode(image: vec3<f32>) -> vec3<f32>
+{
+    let inv_pq_m2 = 1.0 / pq_m2;
+    let inv_pq_m1 = 1.0 / pq_m1;
+    let Np = pow(max(image, vec3<f32>(0.)), vec3<f32>(inv_pq_m2));
+    var L = Np - pq_c1;
+    L = L / (pq_c2 - pq_c3 * Np);
+    L = pow(max(L, vec3<f32>(0.)), vec3<f32>(inv_pq_m1));
+
+    return L * pq_C; // returns cd/m^2
+}
+
+fn PQEncode(image: vec3<f32>) -> vec3<f32>
+{
+    let L = image / pq_C;
+    let Lm = pow(max(L, vec3<f32>(0.)), vec3<f32>(pq_m1));
+    var N = (pq_c1 + pq_c2 * Lm) / (1.0 + pq_c3 * Lm);
+    N = pow(N, vec3<f32>(pq_m2));
+
+    return clamp(N, vec3<f32>(0.), vec3<f32>(1.));
+}
+
+// Preload the color data into shared memory, convert to PQ space
+// Also preload the 2D motion vectors
+fn preload(group_base: vec2<i32>, group_size: vec2<i32>, local_invocation_index: u32, input_size: vec2<u32>)
+{
+    let preload_size = min(group_size + 3, vec2<i32>(19));
+
+    for(var linear_idx = i32(local_invocation_index); linear_idx < preload_size.x * preload_size.y; linear_idx = linear_idx + 256)
+    {
+        // Convert the linear index to 2D index in a (preload_size x preload_size) virtual group
+        let t = (f32(linear_idx) + 0.5) / f32(preload_size.x);
+        let xx = i32(floor(fract(t) * f32(preload_size.x)));
+        let yy = i32(floor(t));
+
+        // Load
+        var ipos = group_base + vec2<i32>(xx, yy) - 1;
+        ipos = clamp(ipos, vec2<i32>(0, 0), vec2<i32>(input_size) - 1);
+        let color = textureLoad(t_colorTexture, ipos, 0);
+        let color_pq = PQEncode(color.rgb);
+        let motion = vec2<f32>(0., 0.); // TODO
+
+        // Store
+        s_color_pq[yy][xx] = vec2<u32>(pack2x16float(color_pq.rg), pack2x16float(vec2<f32>(color_pq.b, color.a)));
+        s_motion[yy][xx] = pack2x16float(motion);
+    }
+}
+
+fn get_shared_color(pos: vec2<i32>, group_base: vec2<i32>) -> vec3<f32>
+{
+    let addr = pos - group_base + 1;
+    
+    let data = s_color_pq[addr.y][addr.x];
+    return vec3<f32>(unpack2x16float(data.x), unpack2x16float(data.y).x);
+}
+
+fn get_shared_motion(pos: vec2<i32>, group_base: vec2<i32>) -> vec2<f32>
+{
+    let addr = pos - group_base + 1;
+    
+    return unpack2x16float(s_motion[addr.y][addr.x]);
+}
+
+
+struct Moments {
+    mom1: vec3<f32>;
+    mom2: vec3<f32>;
+};
+
+fn get_moments(pos: vec2<i32>, group_base: vec2<i32>, r: i32) -> Moments
+{
+    var mom: Moments;
+    mom.mom1 = vec3<f32>(0.0);
+    mom.mom2 = vec3<f32>(0.0);
+
+    for(var yy = -r; yy <= r; yy = yy + 1)
+    {
+        for(var xx = -r; xx <= r; xx = xx + 1)
+        {
+            if(xx == 0 && yy == 0) {
+                continue;
+            }
+
+            let p = pos + vec2<i32>(xx, yy);
+            let c = get_shared_color(p, group_base);
+
+            mom.mom1 = mom.mom1 + c.rgb;
+            mom.mom2 = mom.mom2 + c.rgb * c.rgb;
+        }
+    }
+
+    return mom;
+}
 
 fn get_sample_weight(delta: vec2<f32>, scale: f32) -> f32
 {
@@ -80,7 +184,10 @@ fn sample_texture_catmull_rom(tex: texture_2d<f32>, sam: sampler, uv: vec2<f32> 
 }
 
 [[stage(compute), workgroup_size(16, 16)]]
-fn main([[builtin(global_invocation_id)]] global_invocation_id: vec3<u32>) {
+fn main(
+    [[builtin(global_invocation_id)]] global_invocation_id: vec3<u32>, 
+    [[builtin(local_invocation_index)]] local_invocation_index: u32
+    ) {
     let ipos = vec2<i32>(global_invocation_id.xy);
 
     let output_size = textureDimensions(t_outputTexture);
@@ -117,7 +224,7 @@ fn main([[builtin(global_invocation_id)]] global_invocation_id: vec3<u32>) {
             // Mix the new color with the clamped previous color
             let motion_weight = smoothStep(0., 1., sqrt(dot(motion, motion)));
             let sample_weight = get_sample_weight(nearest_render_pos - vec2<f32>(int_render_pos), f32(output_size.x) / f32(input_size.x));
-            var pixel_weight = max(motion_weight, sample_weight) * 0.1f;
+            var pixel_weight = max(motion_weight, sample_weight) * 0.1;
             pixel_weight = clamp(pixel_weight, 0., 1.);
             color_output = mix(color_prev, color_center, pixel_weight);
         //}
