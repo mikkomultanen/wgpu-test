@@ -125,6 +125,7 @@ struct Uniforms {
     world_size: vec2<f32>;
     inv_world_size: vec2<f32>;
     pixel_size: vec2<f32>;
+    sub_pixel_jitter: vec2<f32>;
     mouse: vec2<f32>;
     cursor_size: f32;
     time: f32;
@@ -150,7 +151,7 @@ fn main([[builtin(vertex_index)]] in_vertex_index: u32) -> VertexOutput {
     );
     var out: VertexOutput;
     out.position = vec4<f32>(vertices[in_vertex_index], 0.0, 1.0);
-    out.world_pos = uniforms.translate + 0.5 * out.position.xy * uniforms.view_size;
+    out.world_pos = uniforms.translate + 0.5 * out.position.xy * uniforms.view_size + uniforms.pixel_size * uniforms.sub_pixel_jitter;
     return out;
 }
 

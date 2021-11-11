@@ -5,13 +5,13 @@ struct Uniforms {
     world_size: vec2<f32>;
     inv_world_size: vec2<f32>;
     pixel_size: vec2<f32>;
+    sub_pixel_jitter: vec2<f32>;
     mouse: vec2<f32>;
     cursor_size: f32;
     time: f32;
     exposure: f32;
 };
 
-let sub_pixel_jitter = vec2<f32>(0., 0.); // TODO move to uniforms
 let flt_taa_anti_sparkle = 0.1; // TODO move to uniforms
 let flt_taa_variance = 0.2; // TODO move to uniforms
 
@@ -141,7 +141,7 @@ fn get_sample_weight(delta: vec2<f32>, scale: f32) -> f32
 
 fn hires_to_lores(ipos: vec2<i32>, input_size: vec2<i32>, output_size: vec2<i32>) -> vec2<f32>
 {
-    return (vec2<f32>(ipos) + vec2<f32>(0.5, 0.5)) * (vec2<f32>(input_size) / vec2<f32>(output_size)) - vec2<f32>(0.5, 0.5) - sub_pixel_jitter;
+    return (vec2<f32>(ipos) + vec2<f32>(0.5, 0.5)) * (vec2<f32>(input_size) / vec2<f32>(output_size)) - vec2<f32>(0.5, 0.5) - uniforms.sub_pixel_jitter;
 }
 
 // Catmull-Rom filtering code from http://vec3.ca/bicubic-filtering-in-fewer-taps/

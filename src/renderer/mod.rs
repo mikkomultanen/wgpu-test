@@ -12,6 +12,21 @@ use light_map::LightMapRenderer;
 use crate::renderer::light::{LightData, LightsConfig};
 
 pub const MAX_LIGHTS: usize = 1024;
+const NUM_TAA_SAMPLES: usize = 16;
+
+fn halton(base: usize, index: usize) -> f32 {
+    let mut f = 1.;
+    let mut r = 0.;
+    let mut i = index;
+
+    while i > 0
+    {
+        f = f / base as f32;
+        r = r + f * (i % base) as f32;
+        i = i / base;
+    }
+    return r;
+}
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Zeroable, bytemuck::Pod)]
@@ -21,6 +36,7 @@ struct Uniforms {
     pub world_size: [f32; 2],
     pub inv_world_size: [f32; 2],
     pub pixel_size: [f32; 2],
+    pub sub_pixel_jitter: [f32; 2],
     pub mouse: [f32; 2],
     pub cursor_size: f32,
     pub time: f32,
@@ -35,6 +51,7 @@ impl Default for Uniforms {
             world_size: [1.0, 1.0], 
             inv_world_size: [1.0, 1.0],
             pixel_size: [1.0, 1.0],
+            sub_pixel_jitter: [0.0, 0.0],
             mouse: [0.0, 0.0],
             cursor_size: 0.0,
             time: 0.0,
@@ -59,9 +76,13 @@ pub struct Renderer {
     blit_pipeline: wgpu::RenderPipeline,
     color_bind_group_layout: wgpu::BindGroupLayout,
     color_bind_group: wgpu::BindGroup,
+    taa_samples: Vec<[f32; 2]>,
+    taa_sample_index: usize,
     taa: taa::TAA,
     render_pipeline: wgpu::RenderPipeline,
     start_time: Instant,
+    render_resolution: Vector2<u32>, 
+    output_resolution: Vector2<u32>,
     pub position: Point2<f32>,
     pub view_size: Vector2<f32>,
 }
@@ -77,7 +98,7 @@ impl Renderer {
         uniforms.view_size = [view_size.x, view_size.y];
         uniforms.world_size = [world_size.x, world_size.y];
         uniforms.inv_world_size = [1.0 / world_size.x, 1.0 / world_size.y];
-        uniforms.pixel_size = [world_size.x / render_resolution.x as f32, world_size.y / render_resolution.y as f32];
+        uniforms.pixel_size = [view_size.x / render_resolution.x as f32, view_size.y / render_resolution.y as f32];
 
         let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Uniform Buffer"),
@@ -90,7 +111,7 @@ impl Renderer {
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT | wgpu::ShaderStages::COMPUTE,
                     count: None,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
@@ -347,6 +368,9 @@ impl Renderer {
             }
         );
 
+        let taa_samples = (0..NUM_TAA_SAMPLES)
+            .map(|i| [halton(2, i + 1) - 0.5, halton(3, i + 1) - 0.5])
+            .collect();
         let taa = taa::TAA::new(output_resolution, device, queue, &uniform_bind_group_layout, &color_bind_group_layout);
 
         let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
@@ -410,9 +434,13 @@ impl Renderer {
             blit_pipeline,
             color_bind_group_layout,
             color_bind_group,
+            taa_samples,
+            taa_sample_index: 0,
             taa,
             render_pipeline,
             start_time,
+            render_resolution,
+            output_resolution,
             position,
             view_size,
         }
@@ -453,13 +481,16 @@ impl Renderer {
 
         self.taa.resize(output_resolution);
 
+        self.render_resolution = render_resolution;
+        self.output_resolution = output_resolution;
         self.view_size.x = self.view_size.y * output_resolution.x as f32 / output_resolution.y as f32;
-        self.uniforms.pixel_size = [self.view_size.x / output_resolution.x as f32, self.view_size.y / output_resolution.y as f32];
     }
 
     pub fn update_uniforms(&mut self, mouse: Point2<f32>, cursor_size: f32, exposure: f32) {
         self.uniforms.translate = [self.position.x, self.position.y];
         self.uniforms.view_size = [self.view_size.x, self.view_size.y];
+        self.uniforms.pixel_size = [self.view_size.x / self.render_resolution.x as f32, self.view_size.y / self.render_resolution.y as f32];
+        self.uniforms.sub_pixel_jitter = self.taa_samples[self.taa_sample_index];
         self.uniforms.mouse = [mouse.x, mouse.y];
         self.uniforms.cursor_size = cursor_size;
         self.uniforms.time = self.start_time.elapsed().as_secs_f32();
@@ -526,5 +557,6 @@ impl Renderer {
             render_pass.set_bind_group(2, &self.taa.output_bind_group(), &[]);
             render_pass.draw(0..3, 0..1);
         }
+        self.taa_sample_index = (self.taa_sample_index + 1) % self.taa_samples.len();
     }
 }
