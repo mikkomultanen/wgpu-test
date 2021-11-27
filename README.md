@@ -4,8 +4,9 @@
 - [x] 2D SDF
 - [x] Stochastic 2D soft shadows
 - [x] PBR
+- [x] TAA
+- [x] Upscaling
+- [ ] Denoising
+- [ ] Meshes
 - [ ] IBL
 - [ ] GI
-- [ ] Meshes
-- [ ] Denoising and TAA
-- [ ] Upscaling
