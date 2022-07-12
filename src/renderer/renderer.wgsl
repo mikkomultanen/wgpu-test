@@ -1,30 +1,29 @@
-[[block]]
 struct Uniforms {
-    translate: vec2<f32>;
-    view_size: vec2<f32>;
-    world_size: vec2<f32>;
-    inv_world_size: vec2<f32>;
-    pixel_size: vec2<f32>;
-    sub_pixel_jitter: vec2<f32>;
-    mouse: vec2<f32>;
-    cursor_size: f32;
-    time: f32;
-    exposure: f32;
+    translate: vec2<f32>,
+    view_size: vec2<f32>,
+    world_size: vec2<f32>,
+    inv_world_size: vec2<f32>,
+    pixel_size: vec2<f32>,
+    sub_pixel_jitter: vec2<f32>,
+    mouse: vec2<f32>,
+    cursor_size: f32,
+    time: f32,
+    exposure: f32,
 };
 
-[[group(0), binding(0)]]
+@group(0) @binding(0)
 var<uniform> uniforms: Uniforms;
 
 // Vertex shader
 
 struct VertexOutput {
-    [[location(0)]] world_pos: vec2<f32>;
-    [[location(1)]] uv: vec2<f32>;
-    [[builtin(position)]] position: vec4<f32>;
+    @location(0) world_pos: vec2<f32>,
+    @location(1) uv: vec2<f32>,
+    @builtin(position) position: vec4<f32>,
 };
 
-[[stage(vertex)]]
-fn main([[builtin(vertex_index)]] in_vertex_index: u32) -> VertexOutput {
+@vertex
+fn main_vert(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
     var vertices: array<vec2<f32>, 3> = array<vec2<f32>, 3>(
         vec2<f32>(-1., -3.0),
         vec2<f32>(3.0, 1.),
@@ -39,14 +38,14 @@ fn main([[builtin(vertex_index)]] in_vertex_index: u32) -> VertexOutput {
 
 // Fragment shader
 
-[[group(1), binding(0)]]
+@group(1) @binding(0)
 var t_sdf: texture_2d<f32>;
-[[group(1), binding(1)]]
+@group(1) @binding(1)
 var s_sdf: sampler;
 
-[[group(2), binding(0)]]
+@group(2) @binding(0)
 var t_lightmap: texture_2d<f32>;
-[[group(2), binding(1)]]
+@group(2) @binding(1)
 var s_lightmap: sampler;
 
 fn unpackSdf(v: f32) -> f32 {
@@ -66,8 +65,8 @@ fn wrap(p: vec2<f32>) -> vec2<f32>
     return (p + s * uniforms.world_size) % uniforms.world_size - 0.5 * uniforms.world_size;
 }
 
-[[stage(fragment)]]
-fn main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
+@fragment
+fn main_frag(in: VertexOutput) -> @location(0) vec4<f32> {
     var col = textureSample(t_lightmap, s_lightmap, in.uv).rgb;
 
     // reinhard tone mapping
@@ -89,7 +88,7 @@ fn main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
     let CursorThickness = 2.0;
     let CursorCol = vec3<f32>(0., 0., 0.5);
 
-    let cursorAlpha = smoothStep(CursorThickness * worldPosChange, 0., abs(mouseDistance - cursorSize));
+    let cursorAlpha = smoothstep(CursorThickness * worldPosChange, 0., abs(mouseDistance - cursorSize));
 
     return vec4<f32>(mix(col, CursorCol, cursorAlpha), 1.0);
 }

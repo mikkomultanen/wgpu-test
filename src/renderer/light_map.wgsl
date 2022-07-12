@@ -118,32 +118,31 @@ fn hash21(p: f32) -> vec2<f32>
 //}
 
 
-[[block]]
 struct Uniforms {
-    translate: vec2<f32>;
-    view_size: vec2<f32>;
-    world_size: vec2<f32>;
-    inv_world_size: vec2<f32>;
-    pixel_size: vec2<f32>;
-    sub_pixel_jitter: vec2<f32>;
-    mouse: vec2<f32>;
-    cursor_size: f32;
-    time: f32;
-    exposure: f32;
-};
+    translate: vec2<f32>,
+    view_size: vec2<f32>,
+    world_size: vec2<f32>,
+    inv_world_size: vec2<f32>,
+    pixel_size: vec2<f32>,
+    sub_pixel_jitter: vec2<f32>,
+    mouse: vec2<f32>,
+    cursor_size: f32,
+    time: f32,
+    exposure: f32,
+}
 
-[[group(0), binding(0)]]
+@group(0) @binding(0)
 var<uniform> uniforms: Uniforms;
 
 // Vertex shader
 
 struct VertexOutput {
-    [[location(0)]] world_pos: vec2<f32>;
-    [[builtin(position)]] position: vec4<f32>;
-};
+    @location(0) world_pos: vec2<f32>,
+    @builtin(position) position: vec4<f32>,
+}
 
-[[stage(vertex)]]
-fn main([[builtin(vertex_index)]] in_vertex_index: u32) -> VertexOutput {
+@vertex
+fn main_vert(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
     var vertices: array<vec2<f32>, 3> = array<vec2<f32>, 3>(
         vec2<f32>(-1., -3.0),
         vec2<f32>(3.0, 1.),
@@ -157,33 +156,31 @@ fn main([[builtin(vertex_index)]] in_vertex_index: u32) -> VertexOutput {
 
 // Fragment shader
 
-[[group(1), binding(0)]]
+@group(1) @binding(0)
 var t_sdf: texture_2d<f32>;
-[[group(1), binding(1)]]
+@group(1) @binding(1)
 var s_sdf: sampler;
 
 struct LightData {
-    color: vec4<f32>;
-    position: vec2<f32>;
-    radius: f32;
-    range: f32;
+    color: vec4<f32>,
+    position: vec2<f32>,
+    radius: f32,
+    range: f32,
 };
 
-[[block]] 
 struct LightsBuffer {
-    lights: array<LightData>;
+    lights: array<LightData>,
 };
-[[group(2), binding(0)]] 
+@group(2) @binding(0)
 var<storage, read> lightsBuffer: LightsBuffer;
 
-[[block]] 
 struct LightsConfig {
-  numLights : u32;
+  numLights : u32,
 };
-[[group(2), binding(1)]] 
+@group(2) @binding(1)
 var<uniform> lightsConfig: LightsConfig;
 
-[[group(3), binding(0)]]
+@group(3) @binding(0)
 var t_blue_noise: texture_2d<f32>;
 
 fn unpackSdf(v: f32) -> f32 {
@@ -347,8 +344,8 @@ fn traceLight(p_screen: vec2<f32>, p: vec2<f32>, pos: vec2<f32>, color: vec3<f32
     return mix(shad * fall, 4., source) * color;
 }
 
-[[stage(fragment)]]
-fn main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
+@fragment
+fn main_frag(in: VertexOutput) -> @location(0) vec4<f32> {
     let worldPosChange = fwidth(in.world_pos.x);
 
     let dist = sceneDist(in.world_pos);
@@ -427,8 +424,8 @@ fn shadow_pbr(p_screen: vec2<f32>, p: vec2<f32>, pos: vec2<f32>, radius: f32) ->
 	return traceShadow(p_screen, p, pos, lightDir, ld, radius);
 }
 
-[[stage(fragment)]]
-fn main_pbr(in: VertexOutput) -> [[location(0)]] vec4<f32> {
+@fragment
+fn main_frag_pbr(in: VertexOutput) -> @location(0) vec4<f32> {
     let offset = vec3<f32>(0.5 * uniforms.pixel_size.xy, 0.);
 
     let dist = sceneDist(in.world_pos);
@@ -481,7 +478,7 @@ fn main_pbr(in: VertexOutput) -> [[location(0)]] vec4<f32> {
         let falloff = pow((effectiveRange - distance) / effectiveRange, 2.);
         let distanceToSurface = shadow_pbr(in.position.xy, WorldPos.xy, light.position, light.radius);
         let shadow = mix(
-            smoothStep(10., 0., distanceToSurface), 
+            smoothstep(10., 0., distanceToSurface), 
             step(distanceToSurface, 0.), 
             step(0., dist)
         );
@@ -546,8 +543,8 @@ fn trace(p: vec2<f32>, dir: vec2<f32>, worldPosChange: f32) -> vec4<f32>
     return vec4<f32>(0., 0., 0., 1.);
 }
 
-[[stage(fragment)]]
-fn main_gi(in: VertexOutput) -> [[location(0)]] vec4<f32> {
+@fragment
+fn main_frag_gi(in: VertexOutput) -> @location(0) vec4<f32> {
     let worldPosChange = fwidth(in.world_pos.x);
 
     var light = vec4<f32>(0., 0., 0., 1.);

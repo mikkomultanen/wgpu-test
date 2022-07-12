@@ -43,17 +43,14 @@ impl TAA {
                         ty: wgpu::BindingType::Texture {
                             multisampled: false,
                             view_dimension: wgpu::TextureViewDimension::D2,
-                            sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
                         },
                         count: None,
                     },
                     wgpu::BindGroupLayoutEntry {
                         binding: 1,
                         visibility: wgpu::ShaderStages::COMPUTE,
-                        ty: wgpu::BindingType::Sampler {
-                            comparison: false,
-                            filtering: true,
-                        },
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                         count: None,
                     },
                     wgpu::BindGroupLayoutEntry {
@@ -102,10 +99,7 @@ impl TAA {
                     wgpu::BindGroupLayoutEntry {
                         binding: 1,
                         visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler {
-                            comparison: false,
-                            filtering: true,
-                        },
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                         count: None,
                     },
                 ],
@@ -118,7 +112,7 @@ impl TAA {
             Self::create_output_bind_group(device, &output_bind_group_layout, &textures[1].view, &output_sampler),
         ];
 
-        let taa_shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+        let taa_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(include_str!("taa.wgsl").into()),
         });
@@ -211,7 +205,7 @@ impl TAA {
             compute_pass.set_bind_group(0, uniform_bind_group, &[]);
             compute_pass.set_bind_group(1, color_bind_group, &[]);
             compute_pass.set_bind_group(2, taa_bind_group, &[]);
-            compute_pass.dispatch(
+            compute_pass.dispatch_workgroups(
                 (self.output_resolution.x as f32 / 16.).ceil() as u32,
                 (self.output_resolution.y as f32 / 16.).ceil() as u32,
                 1

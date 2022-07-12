@@ -62,7 +62,7 @@ impl State {
             None,
         ).await.expect("Unable to find a suitable GPU adapter!");
 
-        let surface_format = surface.get_preferred_format(&adapter).unwrap();
+        let surface_format = surface.get_supported_formats(&adapter)[0];
 
         let sdf = sdf::SDF::new(SDF_SIZE, WORLD_SIZE, &device, &queue);
 
@@ -81,7 +81,7 @@ impl State {
             format: surface_format,
             width: size.width,
             height: size.height,
-            present_mode: wgpu::PresentMode::Mailbox,
+            present_mode: wgpu::PresentMode::Fifo,
         };
 
         surface.configure(&device, &config);

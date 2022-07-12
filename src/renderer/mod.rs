@@ -41,6 +41,7 @@ struct Uniforms {
     pub cursor_size: f32,
     pub time: f32,
     pub exposure: f32,
+    pub dummy: f32,
 }
 
 impl Default for Uniforms {
@@ -56,6 +57,7 @@ impl Default for Uniforms {
             cursor_size: 0.0,
             time: 0.0,
             exposure: 1.0,
+            dummy: 0.0,
         }
     }
 }
@@ -149,10 +151,7 @@ impl Renderer {
                     wgpu::BindGroupLayoutEntry {
                         binding: 1,
                         visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler {
-                            comparison: false,
-                            filtering: true,
-                        },
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                         count: None,
                     },
                 ],
@@ -261,10 +260,7 @@ impl Renderer {
                     wgpu::BindGroupLayoutEntry {
                         binding: 1,
                         visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler {
-                            comparison: false,
-                            filtering: true,
-                        },
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                         count: None,
                     },
                 ],
@@ -291,7 +287,7 @@ impl Renderer {
 
         let color_texture = texture::Texture::new_intermediate(device, render_resolution, COLOR_TEXTURE_FORMAT);
 
-        let blit_shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+        let blit_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(include_str!("blit.wgsl").into()),
         });
@@ -308,17 +304,17 @@ impl Renderer {
             layout: Some(&blit_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &blit_shader,
-                entry_point: "main",
+                entry_point: "main_vert",
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &blit_shader,
-                entry_point: "main",
-                targets: &[wgpu::ColorTargetState {
+                entry_point: "main_frag",
+                targets: &[Some(wgpu::ColorTargetState {
                     format: COLOR_TEXTURE_FORMAT,
                     blend: Some(wgpu::BlendState::REPLACE),
                     write_mask: wgpu::ColorWrites::ALL,
-                }],
+                })],
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
@@ -326,7 +322,7 @@ impl Renderer {
                 front_face: wgpu::FrontFace::Ccw,
                 cull_mode: Some(wgpu::Face::Back),
                 polygon_mode: wgpu::PolygonMode::Fill,
-                clamp_depth: false,
+                unclipped_depth: false,
                 conservative: false,
             },
             depth_stencil: None,
@@ -335,6 +331,7 @@ impl Renderer {
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },
+            multiview: None,
         });
 
         let color_bind_group_layout = device.create_bind_group_layout(
@@ -373,30 +370,30 @@ impl Renderer {
             .collect();
         let taa = taa::TAA::new(output_resolution, device, queue, &uniform_bind_group_layout, &color_bind_group_layout);
 
-        let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(include_str!("renderer.wgsl").into()),
         });
 
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Render Pipeline Layout"),
+                label: Some("Renderer Render Pipeline Layout"),
                 bind_group_layouts: &[&uniform_bind_group_layout, &sdf_bind_group_layout, &taa.output_bind_group_layout],
                 push_constant_ranges: &[],
             });
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Render Pipeline"),
+            label: Some("Renderer Render Pipeline"),
             layout: Some(&render_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: "main",
+                entry_point: "main_vert",
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: "main",
-                targets: &[(*surface_format).into()],
+                entry_point: "main_frag",
+                targets: &[Some((*surface_format).into())],
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
@@ -404,7 +401,7 @@ impl Renderer {
                 front_face: wgpu::FrontFace::Ccw,
                 cull_mode: Some(wgpu::Face::Back),
                 polygon_mode: wgpu::PolygonMode::Fill,
-                clamp_depth: false,
+                unclipped_depth: false,
                 conservative: false,
             },
             depth_stencil: None,
@@ -413,6 +410,7 @@ impl Renderer {
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },
+            multiview: None,
         });
 
         let start_time = Instant::now();
@@ -510,7 +508,7 @@ impl Renderer {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Denoising and diffuse lighting pass"),
                 color_attachments: &[
-                    wgpu::RenderPassColorAttachment {
+                    Some(wgpu::RenderPassColorAttachment {
                         view: &self.color_texture.view,
                         resolve_target: None,
                         ops: wgpu::Operations {
@@ -522,7 +520,7 @@ impl Renderer {
                             }),
                             store: true,
                         }
-                    }
+                    })
                 ],
                 depth_stencil_attachment: None,
             });
@@ -535,7 +533,7 @@ impl Renderer {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
                 color_attachments: &[
-                    wgpu::RenderPassColorAttachment {
+                    Some(wgpu::RenderPassColorAttachment {
                         view: &view,
                         resolve_target: None,
                         ops: wgpu::Operations {
@@ -547,7 +545,7 @@ impl Renderer {
                             }),
                             store: true,
                         }
-                    }
+                    })
                 ],
                 depth_stencil_attachment: None,
             });

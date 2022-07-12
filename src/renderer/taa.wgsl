@@ -1,33 +1,32 @@
-[[block]]
 struct Uniforms {
-    translate: vec2<f32>;
-    view_size: vec2<f32>;
-    world_size: vec2<f32>;
-    inv_world_size: vec2<f32>;
-    pixel_size: vec2<f32>;
-    sub_pixel_jitter: vec2<f32>;
-    mouse: vec2<f32>;
-    cursor_size: f32;
-    time: f32;
-    exposure: f32;
+    translate: vec2<f32>,
+    view_size: vec2<f32>,
+    world_size: vec2<f32>,
+    inv_world_size: vec2<f32>,
+    pixel_size: vec2<f32>,
+    sub_pixel_jitter: vec2<f32>,
+    mouse: vec2<f32>,
+    cursor_size: f32,
+    time: f32,
+    exposure: f32,
 };
 
 let flt_taa_anti_sparkle = 0.1; // TODO move to uniforms
 let flt_taa_variance = 0.2; // TODO move to uniforms
 
-[[group(0), binding(0)]]
+@group(0) @binding(0)
 var<uniform> uniforms: Uniforms;
 
-[[group(1), binding(0)]]
+@group(1) @binding(0)
 var t_colorTexture: texture_2d<f32>;
 
-[[group(2), binding(0)]]
+@group(2) @binding(0)
 var t_historyTexture: texture_2d<f32>;
 
-[[group(2), binding(1)]]
+@group(2) @binding(1)
 var s_historyTexture: sampler;
 
-[[group(2), binding(2)]]
+@group(2) @binding(2)
 var t_outputTexture: texture_storage_2d<rgba16float, write>;
 
 var<workgroup> s_color_pq : array<array<vec2<u32>, 19>, 19>;
@@ -105,8 +104,8 @@ fn get_shared_motion(pos: vec2<i32>, group_base: vec2<i32>) -> vec2<f32>
 
 
 struct Moments {
-    mom1: vec3<f32>;
-    mom2: vec3<f32>;
+    mom1: vec3<f32>,
+    mom2: vec3<f32>,
 };
 
 fn get_moments(pos: vec2<i32>, group_base: vec2<i32>, r: i32) -> Moments
@@ -184,11 +183,11 @@ fn sample_texture_catmull_rom(tex: texture_2d<f32>, sam: sampler, uv: vec2<f32> 
     return sum;
 }
 
-[[stage(compute), workgroup_size(16, 16)]]
+@compute @workgroup_size(16, 16)
 fn main(
-    [[builtin(global_invocation_id)]] global_invocation_id: vec3<u32>,
-    [[builtin(workgroup_id)]] workgroup_id: vec3<u32>, 
-    [[builtin(local_invocation_index)]] local_invocation_index: u32
+    @builtin(global_invocation_id) global_invocation_id: vec3<u32>,
+    @builtin(workgroup_id) workgroup_id: vec3<u32>, 
+    @builtin(local_invocation_index) local_invocation_index: u32
     ) {
     let input_size = textureDimensions(t_colorTexture);
     let output_size = textureDimensions(t_outputTexture);
@@ -288,7 +287,7 @@ fn main(
             }
 
             // Mix the new color with the clamped previous color
-            let motion_weight = smoothStep(0., 1., sqrt(dot(motion, motion)));
+            let motion_weight = smoothstep(0., 1., sqrt(dot(motion, motion)));
             let sample_weight = get_sample_weight(nearest_render_pos - vec2<f32>(int_render_pos), f32(output_size.x) / f32(input_size.x));
             var pixel_weight = max(motion_weight, sample_weight) * 0.1;
             pixel_weight = clamp(pixel_weight, 0., 1.);

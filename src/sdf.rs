@@ -7,6 +7,7 @@ struct Uniforms {
     pub mouse: [f32; 2],
     pub size: [f32; 2],
     pub cursor_size: f32,
+    pub dummy: f32,
 }
 
 impl Default for Uniforms {
@@ -15,6 +16,7 @@ impl Default for Uniforms {
             mouse: [0.0, 0.0],
             size: [1.0, 1.0],
             cursor_size: 20.0,
+            dummy: 0.0,
         }
     }
 }
@@ -55,7 +57,7 @@ impl SDF {
             encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
                 color_attachments: &[
-                    wgpu::RenderPassColorAttachment {
+                    Some(wgpu::RenderPassColorAttachment {
                         view: &view,
                         resolve_target: None,
                         ops: wgpu::Operations {
@@ -67,7 +69,7 @@ impl SDF {
                             }),
                             store: true,
                         }
-                    }
+                    })
                 ],
                 depth_stencil_attachment: None,
             });
@@ -126,7 +128,7 @@ impl SDF {
             label: None,
         });
 
-        let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("SDF Shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("sdf.wgsl").into()),
         });
@@ -136,13 +138,13 @@ impl SDF {
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: "main",
+                entry_point: "main_vert",
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: "main",
-                targets: &[wgpu::ColorTargetState {
+                entry_point: "main_frag",
+                targets: &[Some(wgpu::ColorTargetState {
                     format: TEXTURE_FORMAT,
                     blend: Some(wgpu::BlendState {
                         color: wgpu::BlendComponent {
@@ -157,13 +159,12 @@ impl SDF {
                         },
                     }),
                     write_mask: wgpu::ColorWrites::RED,
-                }],
+                })],
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
                 front_face: wgpu::FrontFace::Ccw,
                 cull_mode: Some(wgpu::Face::Back),
-                clamp_depth: false,
                 ..Default::default()
             },
             depth_stencil: None,
@@ -172,6 +173,7 @@ impl SDF {
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },
+            multiview: None,
         });
 
         return Self {
@@ -193,14 +195,14 @@ impl SDF {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[
-                    wgpu::RenderPassColorAttachment {
+                    Some(wgpu::RenderPassColorAttachment {
                         view: &self.view,
                         resolve_target: None,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Load,
                             store: true,
                         }
-                    }
+                    })
                 ],
                 depth_stencil_attachment: None,
             });

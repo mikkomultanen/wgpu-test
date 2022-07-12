@@ -63,34 +63,34 @@ impl LightMapRenderer {
         });
         let lightmap_view = lightmap_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-        let lightmap_shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+        let lightmap_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Lightmap shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("light_map.wgsl").into()),
         });
 
         let lightmap_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Render Pipeline Layout"),
+                label: Some("Lightmap Render Pipeline Layout"),
                 bind_group_layouts: &[uniform_bind_group_layout, sdf_bind_group_layout, lights_bind_group_layout, &blue_noise_bind_group_layout],
                 push_constant_ranges: &[],
             });
 
         let lightmap_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Render Pipeline"),
+            label: Some("Lightmap Render Pipeline"),
             layout: Some(&lightmap_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &lightmap_shader,
-                entry_point: "main",
+                entry_point: "main_vert",
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &lightmap_shader,
-                entry_point: "main_pbr",
-                targets: &[wgpu::ColorTargetState {
+                entry_point: "main_frag_pbr",
+                targets: &[Some(wgpu::ColorTargetState {
                     format: TEXTURE_FORMAT,
                     blend: Some(wgpu::BlendState::REPLACE),
                     write_mask: wgpu::ColorWrites::ALL,
-                }],
+                })],
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
@@ -98,7 +98,7 @@ impl LightMapRenderer {
                 front_face: wgpu::FrontFace::Ccw,
                 cull_mode: Some(wgpu::Face::Back),
                 polygon_mode: wgpu::PolygonMode::Fill,
-                clamp_depth: false,
+                unclipped_depth: false,
                 conservative: false,
             },
             depth_stencil: None,
@@ -107,6 +107,7 @@ impl LightMapRenderer {
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },
+            multiview: None,
         });
 
         return Self {
@@ -140,7 +141,7 @@ impl LightMapRenderer {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[
-                    wgpu::RenderPassColorAttachment {
+                    Some(wgpu::RenderPassColorAttachment {
                         view: &self.lightmap_view,
                         resolve_target: None,
                         ops: wgpu::Operations {
@@ -152,7 +153,7 @@ impl LightMapRenderer {
                             }),
                             store: true,
                         }
-                    }
+                    })
                 ],
                 depth_stencil_attachment: None,
             });

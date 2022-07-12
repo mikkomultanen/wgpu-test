@@ -91,7 +91,7 @@ impl GUI {
         self.res_str = res_str(render_resolution, output_resolution);
     }
 
-    pub fn render(&mut self, device: &mut wgpu::Device, queue: &mut wgpu::Queue, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) -> egui::Output {
+    pub fn render(&mut self, device: &mut wgpu::Device, queue: &mut wgpu::Queue, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
         self.platform.begin_frame();
 
         {
@@ -122,16 +122,15 @@ impl GUI {
             });
         }
 
-        let (output, paint_commands) = self.platform.end_frame(None);
-        let paint_jobs = self.platform.context().tessellate(paint_commands);
+        let output = self.platform.end_frame(None);
+        let paint_jobs = self.platform.context().tessellate(output.shapes);
 
         let screen_descriptor = ScreenDescriptor {
             physical_width: self.size.width,
             physical_height: self.size.height,
             scale_factor: self.scale_factor as f32,
         };
-        self.rpass.update_texture(&device, &queue, &self.platform.context().texture());
-        self.rpass.update_user_textures(&device, &queue);
+        self.rpass.add_textures(&device, &queue, &output.textures_delta).unwrap();
         self.rpass.update_buffers(&device, &queue, &paint_jobs, &screen_descriptor);
 
         self.rpass.execute(
@@ -141,8 +140,7 @@ impl GUI {
             &screen_descriptor,
             None,
         ).unwrap();
-
-        output
+        self.rpass.remove_textures(output.textures_delta).unwrap();
     }
 
     pub fn light_color(&self) -> [f32; 3] {
@@ -151,7 +149,7 @@ impl GUI {
 
     pub fn present_mode(&self) -> wgpu::PresentMode {
         if self.v_sync {
-            wgpu::PresentMode::Mailbox
+            wgpu::PresentMode::Fifo
         } else {
             wgpu::PresentMode::Immediate
         }
