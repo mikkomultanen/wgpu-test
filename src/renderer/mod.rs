@@ -1,6 +1,7 @@
 mod light_map;
 mod texture;
 mod taa;
+mod blit_sampler;
 pub mod light;
 
 use cgmath::*;
@@ -12,7 +13,7 @@ use light_map::LightMapRenderer;
 use crate::renderer::light::{LightData, LightsConfig};
 
 pub const MAX_LIGHTS: usize = 1024;
-const NUM_TAA_SAMPLES: usize = 16;
+const NUM_SUBPIXEL_JITTER_SAMPLES: usize = 16;
 
 fn halton(base: usize, index: usize) -> f32 {
     let mut f = 1.;
@@ -26,6 +27,40 @@ fn halton(base: usize, index: usize) -> f32 {
         i = i / base;
     }
     return r;
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Upsampler {
+    TAA,
+    BLIT,
+}
+
+enum UpsamplerCell {
+    TAA(taa::TAA),
+    BLIT(blit_sampler::BLIT),
+}
+
+impl UpsamplerCell {
+    pub fn resize(&mut self, resolution: Vector2<u32>) {
+        match self {
+            Self::TAA(taa) => taa.resize(resolution),
+            Self::BLIT(_) => {},
+        }
+    }
+
+    pub fn output_bind_group(&self) -> &wgpu::BindGroup {
+        match self {
+            Self::TAA(taa) => taa.output_bind_group(),
+            Self::BLIT(blit) => blit.output_bind_group(),
+        }
+    }
+
+    pub fn upsampler(&self) -> Upsampler {
+        match self {
+            Self::TAA(_) => Upsampler::TAA,
+            Self::BLIT(_) => Upsampler::BLIT,
+        }
+    }
 }
 
 #[repr(C)]
@@ -65,6 +100,7 @@ impl Default for Uniforms {
 pub struct Renderer {
     uniforms: Uniforms,
     uniform_buffer: wgpu::Buffer,
+    uniform_bind_group_layout: wgpu::BindGroupLayout,
     uniform_bind_group: wgpu::BindGroup,
     lights_buffer: wgpu::Buffer,
     lights_config_buffer: wgpu::Buffer,
@@ -78,9 +114,10 @@ pub struct Renderer {
     blit_pipeline: wgpu::RenderPipeline,
     color_bind_group_layout: wgpu::BindGroupLayout,
     color_bind_group: wgpu::BindGroup,
-    taa_samples: Vec<[f32; 2]>,
-    taa_sample_index: usize,
-    taa: taa::TAA,
+    subpixel_jitter_samples: Vec<[f32; 2]>,
+    subpixel_jitter_index: usize,
+    upsampler_output_bind_group_layout: wgpu::BindGroupLayout,
+    upsampler: UpsamplerCell,
     render_pipeline: wgpu::RenderPipeline,
     start_time: Instant,
     render_resolution: Vector2<u32>, 
@@ -365,10 +402,34 @@ impl Renderer {
             }
         );
 
-        let taa_samples = (0..NUM_TAA_SAMPLES)
+        let subpixel_jitter_samples = (0..NUM_SUBPIXEL_JITTER_SAMPLES)
             .map(|i| [halton(2, i + 1) - 0.5, halton(3, i + 1) - 0.5])
             .collect();
-        let taa = taa::TAA::new(output_resolution, device, queue, &uniform_bind_group_layout, &color_bind_group_layout);
+
+        let upsampler_output_bind_group_layout = device.create_bind_group_layout(
+            &wgpu::BindGroupLayoutDescriptor {
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+                label: None,
+            }
+        );
+        let upsampler = UpsamplerCell::TAA(taa::TAA::new(output_resolution, device, queue, &uniform_bind_group_layout, &color_bind_group_layout, &upsampler_output_bind_group_layout));
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
@@ -378,7 +439,7 @@ impl Renderer {
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Renderer Render Pipeline Layout"),
-                bind_group_layouts: &[&uniform_bind_group_layout, &sdf_bind_group_layout, &taa.output_bind_group_layout],
+                bind_group_layouts: &[&uniform_bind_group_layout, &sdf_bind_group_layout, &upsampler_output_bind_group_layout],
                 push_constant_ranges: &[],
             });
 
@@ -419,6 +480,7 @@ impl Renderer {
         return Self {
             uniforms,
             uniform_buffer,
+            uniform_bind_group_layout,
             uniform_bind_group,
             lights_buffer,
             lights_config_buffer,
@@ -432,9 +494,10 @@ impl Renderer {
             blit_pipeline,
             color_bind_group_layout,
             color_bind_group,
-            taa_samples,
-            taa_sample_index: 0,
-            taa,
+            subpixel_jitter_samples,
+            subpixel_jitter_index: 0,
+            upsampler_output_bind_group_layout,
+            upsampler,
             render_pipeline,
             start_time,
             render_resolution,
@@ -476,6 +539,10 @@ impl Renderer {
                 label: None,
             }
         );
+        match &mut self.upsampler {
+            UpsamplerCell::TAA(_) => {},
+            UpsamplerCell::BLIT(blit) => blit.update_output_bind_group(device, &self.color_texture, &self.upsampler_output_bind_group_layout)
+        }
 
         self.render_resolution = render_resolution;
     }
@@ -483,7 +550,7 @@ impl Renderer {
     pub fn resize(&mut self, render_resolution: Vector2<u32>, output_resolution: Vector2<u32>, device: &wgpu::Device) {
         self.resize_render_resolution(render_resolution, device);
 
-        self.taa.resize(output_resolution);
+        self.upsampler.resize(output_resolution);
 
         self.output_resolution = output_resolution;
         self.view_size.x = self.view_size.y * output_resolution.x as f32 / output_resolution.y as f32;
@@ -493,7 +560,7 @@ impl Renderer {
         self.uniforms.translate = [self.position.x, self.position.y];
         self.uniforms.view_size = [self.view_size.x, self.view_size.y];
         self.uniforms.pixel_size = [self.view_size.x / self.render_resolution.x as f32, self.view_size.y / self.render_resolution.y as f32];
-        self.uniforms.sub_pixel_jitter = self.taa_samples[self.taa_sample_index];
+        self.uniforms.sub_pixel_jitter = self.subpixel_jitter_samples[self.subpixel_jitter_index];
         self.uniforms.mouse = [mouse.x, mouse.y];
         self.uniforms.cursor_size = cursor_size;
         self.uniforms.time = self.start_time.elapsed().as_secs_f32();
@@ -533,8 +600,13 @@ impl Renderer {
             render_pass.set_bind_group(0, &self.lightmap_bind_group, &[]);
             render_pass.draw(0..3, 0..1);
         }
-        self.taa.render(device, queue, encoder, &self.uniform_bind_group, &self.color_bind_group);
-        {   
+        match &mut self.upsampler {
+            UpsamplerCell::TAA(taa) => {
+                taa.render(device, queue, encoder, &self.uniform_bind_group, &self.color_bind_group, &self.upsampler_output_bind_group_layout);
+            },
+            UpsamplerCell::BLIT(_) => {},
+        }
+        {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
                 color_attachments: &[
@@ -557,9 +629,18 @@ impl Renderer {
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
             render_pass.set_bind_group(1, &self.sdf_bind_group, &[]);
-            render_pass.set_bind_group(2, &self.taa.output_bind_group(), &[]);
+            render_pass.set_bind_group(2, &self.upsampler.output_bind_group(), &[]);
             render_pass.draw(0..3, 0..1);
         }
-        self.taa_sample_index = (self.taa_sample_index + 1) % self.taa_samples.len();
+        self.subpixel_jitter_index = (self.subpixel_jitter_index + 1) % self.subpixel_jitter_samples.len();
+    }
+
+    pub fn update_upsampler(&mut self, device: &wgpu::Device, queue: &mut wgpu::Queue, upsampler: &Upsampler) {
+        if *upsampler != self.upsampler.upsampler() {
+            self.upsampler = match upsampler {
+                Upsampler::TAA => UpsamplerCell::TAA(taa::TAA::new(self.output_resolution, device, queue, &self.uniform_bind_group_layout, &self.color_bind_group_layout, &self.upsampler_output_bind_group_layout)),
+                Upsampler::BLIT => UpsamplerCell::BLIT(blit_sampler::BLIT::new(device, &self.color_texture, &self.upsampler_output_bind_group_layout)),
+            }
+        }
     }
 }

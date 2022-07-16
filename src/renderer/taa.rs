@@ -9,7 +9,6 @@ pub struct TAA {
     taa_bind_group_layout: wgpu::BindGroupLayout,
     taa_bind_groups: [wgpu::BindGroup; 2],
     output_sampler: wgpu::Sampler,
-    pub output_bind_group_layout: wgpu::BindGroupLayout,
     output_bind_groups: [wgpu::BindGroup; 2],
     history_texture_index: usize,
     taa_pipeline: wgpu::ComputePipeline,
@@ -18,7 +17,7 @@ pub struct TAA {
 const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 
 impl TAA {
-    pub fn new(resolution: Vector2<u32>, device: &wgpu::Device, _queue: &mut wgpu::Queue, uniform_bind_group_layout: &wgpu::BindGroupLayout, color_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
+    pub fn new(resolution: Vector2<u32>, device: &wgpu::Device, _queue: &mut wgpu::Queue, uniform_bind_group_layout: &wgpu::BindGroupLayout, color_bind_group_layout: &wgpu::BindGroupLayout, output_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
         let textures = [
             texture::Texture::new_intermediate(device, resolution, TEXTURE_FORMAT),
             texture::Texture::new_intermediate(device, resolution, TEXTURE_FORMAT),
@@ -83,33 +82,9 @@ impl TAA {
             ..Default::default()
         });
 
-        let output_bind_group_layout = device.create_bind_group_layout(
-            &wgpu::BindGroupLayoutDescriptor {
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            multisampled: false,
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                ],
-                label: None,
-            }
-        );
-
         let output_bind_groups = [
-            Self::create_output_bind_group(device, &output_bind_group_layout, &textures[0].view, &output_sampler),
-            Self::create_output_bind_group(device, &output_bind_group_layout, &textures[1].view, &output_sampler),
+            Self::create_output_bind_group(device, output_bind_group_layout, &textures[0].view, &output_sampler),
+            Self::create_output_bind_group(device, output_bind_group_layout, &textures[1].view, &output_sampler),
         ];
 
         let taa_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -138,7 +113,6 @@ impl TAA {
             taa_bind_group_layout,
             taa_bind_groups,
             output_sampler,
-            output_bind_group_layout,
             output_bind_groups,
             history_texture_index: 0,
             taa_pipeline,
@@ -187,7 +161,7 @@ impl TAA {
         self.output_resolution = resolution;
     }
 
-    pub fn render(&mut self, device: &wgpu::Device, _queue: &mut wgpu::Queue, encoder: &mut wgpu::CommandEncoder, uniform_bind_group: &wgpu::BindGroup, color_bind_group: &wgpu::BindGroup) {
+    pub fn render(&mut self, device: &wgpu::Device, _queue: &mut wgpu::Queue, encoder: &mut wgpu::CommandEncoder, uniform_bind_group: &wgpu::BindGroup, color_bind_group: &wgpu::BindGroup, output_bind_group_layout: &wgpu::BindGroupLayout) {
         let taa_bind_group = &mut self.taa_bind_groups[self.history_texture_index];
         self.history_texture_index = (self.history_texture_index + 1) % 2;
         let output_texture_size = self.textures[self.history_texture_index].size;
@@ -196,7 +170,7 @@ impl TAA {
             let history_view = &self.textures[(self.history_texture_index + 1) % 2].view;
             let output_view = &self.textures[self.history_texture_index].view;
             *taa_bind_group = Self::create_taa_bind_group(device, &self.taa_bind_group_layout, history_view, &self.taa_sampler, output_view);
-            self.output_bind_groups[self.history_texture_index] = Self::create_output_bind_group(device, &self.output_bind_group_layout, output_view, &self.output_sampler);
+            self.output_bind_groups[self.history_texture_index] = Self::create_output_bind_group(device, output_bind_group_layout, output_view, &self.output_sampler);
         }
 
         {

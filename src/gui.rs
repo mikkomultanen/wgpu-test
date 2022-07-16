@@ -7,6 +7,8 @@ use egui_winit_platform::{Platform, PlatformDescriptor};
 use std::string::String;
 use winit::window::Window;
 
+use crate::renderer;
+
 pub struct GUI {
     size: winit::dpi::PhysicalSize<u32>,
     scale_factor: f64,
@@ -20,6 +22,7 @@ pub struct GUI {
     pub light_radius: f32,
     pub light_range: f32,
     pub exposure: f32,
+    pub upsampler: renderer::Upsampler,
     pub renderer_scale: f32,
     v_sync: bool,
     fps_str: String,
@@ -59,6 +62,7 @@ impl GUI {
             light_radius: 10.0,
             light_range: 1.0,
             exposure: 1.0,
+            upsampler: renderer::Upsampler::TAA,
             renderer_scale: 0.75, 
             v_sync: true,
             fps_str: format!("FPS: -"),
@@ -122,6 +126,12 @@ impl GUI {
                 ui.add(egui::Slider::new(&mut self.light_radius, 0.0..=40.0).text("light radius"));
                 ui.add(egui::Slider::new(&mut self.light_range, 0.0..=1.0).text("light range"));
                 ui.add(egui::Slider::new(&mut self.exposure, 0.0..=10.0).text("exposure"));
+                egui::ComboBox::from_label("upsampler")
+                .selected_text(format!("{:?}", self.upsampler))
+                .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut self.upsampler, renderer::Upsampler::TAA, format!("{:?}", renderer::Upsampler::TAA));
+                            ui.selectable_value(&mut self.upsampler, renderer::Upsampler::BLIT, format!("{:?}", renderer::Upsampler::BLIT));
+                        });
             });
         }
 
