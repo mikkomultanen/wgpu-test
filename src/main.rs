@@ -12,7 +12,6 @@ use winit::{
 use renderer::light::LightData;
 
 const WINDOW_SIZE: winit::dpi::LogicalSize<u32> = winit::dpi::LogicalSize::new(1280, 720);
-const RENDERER_SCALE: f32 = 0.5;
 const WORLD_SIZE: Vector2<f32> = Vector2::new(1024.0, 1024.0);
 const SDF_SIZE: u32 = 1024;
 
@@ -22,6 +21,7 @@ struct State {
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     size: winit::dpi::PhysicalSize<u32>,
+    renderer_scale: f32,
     scale_factor: f64,
     gui: gui::GUI,
     sdf: sdf::SDF,
@@ -66,13 +66,6 @@ impl State {
 
         let sdf = sdf::SDF::new(SDF_SIZE, WORLD_SIZE, &device, &queue);
 
-        let render_resolution = Vector2::new(
-            ((size.width as f32 * RENDERER_SCALE).ceil() as u32).max(16).min(4096),
-            ((size.height as f32 * RENDERER_SCALE).ceil() as u32).max(16).min(4096),
-        );
-        let output_resolution = Vector2::new(size.width, size.height);
-        let renderer = renderer::Renderer::new(render_resolution, output_resolution, WORLD_SIZE, &device, &mut queue, &sdf.view, &sdf.sampler, &surface_format);
-
         let mut lights = Vec::new();
         lights.push(LightData::new([1., 1., 1.], [0., 0.], 10., 10. / 40. * 0.5 * WORLD_SIZE.x));
 
@@ -88,6 +81,15 @@ impl State {
 
         let mut gui = gui::GUI::new(window, &device, &surface_format);
         gui.update_lights(lights.len());
+
+        let renderer_scale = gui.renderer_scale;
+        let render_resolution = Vector2::new(
+            ((size.width as f32 * renderer_scale).ceil() as u32).clamp(16, size.width),
+            ((size.height as f32 * renderer_scale).ceil() as u32).clamp(16, size.height),
+        );
+        let output_resolution = Vector2::new(size.width, size.height);
+        let renderer = renderer::Renderer::new(render_resolution, output_resolution, WORLD_SIZE, &device, &mut queue, &sdf.view, &sdf.sampler, &surface_format);
+
         gui.update_res(render_resolution, output_resolution);
 
         Self {
@@ -96,6 +98,7 @@ impl State {
             queue,
             config,
             size,
+            renderer_scale,
             scale_factor,
             gui,
             sdf,
@@ -120,9 +123,10 @@ impl State {
             self.scale_factor = new_scale_factor;
             self.config.width = new_size.width;
             self.config.height = new_size.height;
+            let renderer_scale = self.gui.renderer_scale;
             let render_resolution = Vector2::new(
-                ((new_size.width as f32 * RENDERER_SCALE).ceil() as u32).max(16).min(4096),
-                ((new_size.height as f32 * RENDERER_SCALE).ceil() as u32).max(16).min(4096),
+                ((new_size.width as f32 * renderer_scale).ceil() as u32).clamp(16, new_size.width),
+                ((new_size.height as f32 * renderer_scale).ceil() as u32).clamp(16, new_size.height),
             );
             let output_resolution = Vector2::new(new_size.width, new_size.height);
             self.renderer.resize(render_resolution, output_resolution, &self.device);
@@ -201,6 +205,17 @@ impl State {
         if present_mode != self.config.present_mode {
             self.config.present_mode = present_mode;
             self.surface.configure(&self.device, &self.config);
+        }
+        let renderer_scale = self.gui.renderer_scale;
+        if renderer_scale != self.renderer_scale {
+            self.renderer_scale = renderer_scale;
+            let render_resolution = Vector2::new(
+                ((self.size.width as f32 * renderer_scale).ceil() as u32).clamp(16, self.size.width),
+                ((self.size.height as f32 * renderer_scale).ceil() as u32).clamp(16, self.size.height),
+            );
+            let output_resolution = Vector2::new(self.size.width, self.size.height);
+            self.renderer.resize_render_resolution(render_resolution, &self.device);
+            self.gui.update_res(render_resolution, output_resolution);
         }
         let frame = self
             .surface

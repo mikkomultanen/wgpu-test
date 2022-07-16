@@ -444,7 +444,7 @@ impl Renderer {
         }
     }
 
-    pub fn resize(&mut self, render_resolution: Vector2<u32>, output_resolution: Vector2<u32>, device: &wgpu::Device) {
+    pub fn resize_render_resolution(&mut self, render_resolution: Vector2<u32>, device: &wgpu::Device) {
         self.light_map_renderer.resize(render_resolution, device);
         self.lightmap_bind_group = device.create_bind_group(
             &wgpu::BindGroupDescriptor {
@@ -477,9 +477,14 @@ impl Renderer {
             }
         );
 
+        self.render_resolution = render_resolution;
+    }
+
+    pub fn resize(&mut self, render_resolution: Vector2<u32>, output_resolution: Vector2<u32>, device: &wgpu::Device) {
+        self.resize_render_resolution(render_resolution, device);
+
         self.taa.resize(output_resolution);
 
-        self.render_resolution = render_resolution;
         self.output_resolution = output_resolution;
         self.view_size.x = self.view_size.y * output_resolution.x as f32 / output_resolution.y as f32;
     }

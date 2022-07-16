@@ -20,6 +20,7 @@ pub struct GUI {
     pub light_radius: f32,
     pub light_range: f32,
     pub exposure: f32,
+    pub renderer_scale: f32,
     v_sync: bool,
     fps_str: String,
     res_str: String,
@@ -58,6 +59,7 @@ impl GUI {
             light_radius: 10.0,
             light_range: 1.0,
             exposure: 1.0,
+            renderer_scale: 0.75, 
             v_sync: true,
             fps_str: format!("FPS: -"),
             res_str: format!("R. - O: -"),
@@ -104,6 +106,7 @@ impl GUI {
                 ui.horizontal(|ui| {
                     ui.add(egui::Checkbox::new(&mut self.v_sync, "VSync"));
                     ui.label(self.fps_str.as_str());
+                    ui.add(egui::Slider::new(&mut self.renderer_scale, 0.5..=1.0).step_by(1.0/32.0).show_value(false));
                     ui.label(self.res_str.as_str());
                     ui.label(self.lights_str.as_str());
                 });
