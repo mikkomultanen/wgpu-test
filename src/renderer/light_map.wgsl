@@ -448,6 +448,8 @@ fn main_frag_pbr(in: VertexOutput) -> @location(0) vec4<f32> {
     } else {
         albedo = vec3<f32>(1., 1., 1.);
     }
+    let patternMask = clamp(dot(floor((abs(in.world_pos) + 2.0) / 4.0), vec2<f32>(1.0)) % 2.0, 0.8, 1.0);
+    albedo = albedo * patternMask;
     let metallic = 0.;
     let roughness = .5;
     let ao = 1.0;
