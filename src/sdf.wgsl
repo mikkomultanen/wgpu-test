@@ -44,3 +44,11 @@ fn main_frag(in: VertexOutput) -> @location(0) f32 {
     let q = (p + 1.5 * uniforms.size) % uniforms.size - 0.5 * uniforms.size;
     return packSdf(length(q) - r);
 }
+
+@fragment
+fn main_frag_subtract(in: VertexOutput) -> @location(0) f32 {
+    let p = uniforms.mouse - in.world_pos;
+    let r = 0.5 * uniforms.cursor_size;
+    let q = (p + 1.5 * uniforms.size) % uniforms.size - 0.5 * uniforms.size;
+    return packSdf(r - length(q));
+}

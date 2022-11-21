@@ -28,7 +28,8 @@ struct State {
     renderer: renderer::Renderer,
     lights: Vec<LightData>,
     mouse_pos: Point2<f32>,
-    mouse_pressed: bool,
+    add_pressed: bool,
+    subtract_pressed: bool,
     up_pressed: bool,
     left_pressed: bool,
     right_pressed: bool,
@@ -106,7 +107,8 @@ impl State {
             renderer,
             lights,
             mouse_pos: Point2::origin(),
-            mouse_pressed: false,
+            add_pressed: false,
+            subtract_pressed: false,
             up_pressed: false,
             left_pressed: false,
             right_pressed: false,
@@ -138,7 +140,8 @@ impl State {
 
     fn input(&mut self, event: &WindowEvent, gui_captured: bool) -> bool {
         if gui_captured {
-            self.mouse_pressed = false;
+            self.add_pressed = false;
+            self.subtract_pressed = false;
         }
         match event {
             WindowEvent::CursorMoved { position, .. } => {
@@ -154,7 +157,8 @@ impl State {
             WindowEvent::MouseInput { state, button, ..} => if !gui_captured {
                 let pressed = *state == ElementState::Pressed;
                 match *button {
-                    MouseButton::Left => self.mouse_pressed = pressed,
+                    MouseButton::Left => self.add_pressed = pressed,
+                    MouseButton::Right => self.subtract_pressed = pressed,
                     _ => (),
                 }
                 true
@@ -238,13 +242,21 @@ impl State {
             (self.gui.light_range * 0.5 * WORLD_SIZE.x).max(self.gui.light_radius),
         );
 
-        if self.mouse_pressed {
+        if self.add_pressed {
             self.sdf.add(
                 mouse_world_pos, 
                 cursor_size, 
                 &self.queue,
                 &mut encoder,
             );
+        }
+        if self.subtract_pressed {
+            self.sdf.subtract(
+                mouse_world_pos, 
+                cursor_size, 
+                &self.queue,
+                &mut encoder,
+            )
         }
 
         self.renderer.update_uniforms(

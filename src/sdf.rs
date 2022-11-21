@@ -25,6 +25,7 @@ pub struct SDF {
     pub view: wgpu::TextureView,
     pub sampler: wgpu::Sampler,
     pipeline: wgpu::RenderPipeline,
+    subtract_pipeline: wgpu::RenderPipeline,
     uniforms: Uniforms,
     uniform_buffer: wgpu::Buffer,
     uniform_bind_group: wgpu::BindGroup,
@@ -176,10 +177,54 @@ impl SDF {
             multiview: None,
         });
 
+        let subtract_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("SDF"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: "main_vert",
+                buffers: &[],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: "main_frag_subtract",
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: TEXTURE_FORMAT,
+                    blend: Some(wgpu::BlendState {
+                        color: wgpu::BlendComponent {
+                            src_factor: wgpu::BlendFactor::One,
+                            dst_factor: wgpu::BlendFactor::One,
+                            operation: wgpu::BlendOperation::Max,
+                        },
+                        alpha: wgpu::BlendComponent {
+                            src_factor: wgpu::BlendFactor::One,
+                            dst_factor: wgpu::BlendFactor::One,
+                            operation: wgpu::BlendOperation::Max,
+                        },
+                    }),
+                    write_mask: wgpu::ColorWrites::RED,
+                })],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: Some(wgpu::Face::Back),
+                ..Default::default()
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview: None,
+        });
+
         return Self {
             view,
             sampler,
             pipeline,
+            subtract_pipeline,
             uniforms,
             uniform_buffer,
             uniform_bind_group,
@@ -207,6 +252,32 @@ impl SDF {
                 depth_stencil_attachment: None,
             });
             render_pass.set_pipeline(&self.pipeline);
+            render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
+            render_pass.draw(0..3, 0..1);
+        }
+    }
+
+    pub fn subtract(&mut self, mouse: Point2<f32>, cursor_size: f32, queue: &wgpu::Queue, encoder: &mut wgpu::CommandEncoder) {
+        self.uniforms.mouse = [mouse.x, mouse.y];
+        self.uniforms.cursor_size = cursor_size;
+        queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[self.uniforms]));
+
+        {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: None,
+                color_attachments: &[
+                    Some(wgpu::RenderPassColorAttachment {
+                        view: &self.view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: true,
+                        }
+                    })
+                ],
+                depth_stencil_attachment: None,
+            });
+            render_pass.set_pipeline(&self.subtract_pipeline);
             render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
             render_pass.draw(0..3, 0..1);
         }
