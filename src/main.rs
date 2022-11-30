@@ -12,8 +12,8 @@ use winit::{
 use renderer::light::LightData;
 
 const WINDOW_SIZE: winit::dpi::LogicalSize<u32> = winit::dpi::LogicalSize::new(1280, 720);
-const WORLD_SIZE: Vector2<f32> = Vector2::new(1024.0, 1024.0);
-const SDF_SIZE: Vector2<u32> = Vector2::new(1024, 1024);
+const WORLD_SIZE: Vector2<f32> = Vector2::new(1280.0, 720.0);
+const SDF_SIZE: Vector2<u32> = Vector2::new(1280, 720);
 
 struct State {
     surface: wgpu::Surface,
