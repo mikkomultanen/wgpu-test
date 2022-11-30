@@ -34,11 +34,11 @@ pub struct SDF {
 const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R16Float;
 
 impl SDF {
-    pub fn new(size: u32, world_size: cgmath::Vector2<f32>, device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
+    pub fn new(size: cgmath::Vector2<u32>, world_size: cgmath::Vector2<f32>, device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             size: wgpu::Extent3d {
-                width: size,
-                height: size,
+                width: size.x,
+                height: size.y,
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
@@ -55,6 +55,10 @@ impl SDF {
         });
 
         {
+            let l = cgmath::Vector2 {
+                x: size.x as f32,
+                y: size.y as f32,
+            }.magnitude() as f64;
             encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
                 color_attachments: &[
@@ -63,7 +67,7 @@ impl SDF {
                         resolve_target: None,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Clear(wgpu::Color {
-                                r: 2.0f64.sqrt() * (size as f64),
+                                r: l,
                                 g: 0.0,
                                 b: 0.0,
                                 a: 0.0,
@@ -232,7 +236,7 @@ impl SDF {
     }
 
     pub fn add(&mut self, mouse: Point2<f32>, cursor_size: f32, queue: &wgpu::Queue, encoder: &mut wgpu::CommandEncoder) {
-        self.uniforms.mouse = [mouse.x, mouse.y];
+        self.uniforms.mouse = mouse.into();
         self.uniforms.cursor_size = cursor_size;
         queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[self.uniforms]));
 
