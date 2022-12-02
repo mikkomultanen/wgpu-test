@@ -1,5 +1,5 @@
 mod gui;
-mod sdf;
+pub mod sdf;
 mod renderer;
 
 use cgmath::*;
@@ -90,7 +90,7 @@ impl State {
             ((size.height as f32 * renderer_scale).ceil() as u32).clamp(16, size.height),
         );
         let output_resolution = Vector2::new(size.width, size.height);
-        let renderer = renderer::Renderer::new(render_resolution, output_resolution, WORLD_SIZE, &device, &mut queue, &sdf.view, &sdf.sampler, &surface_format);
+        let renderer = renderer::Renderer::new(render_resolution, output_resolution, WORLD_SIZE, &device, &mut queue, &sdf, &surface_format);
 
         gui.update_res(render_resolution, output_resolution);
 
@@ -266,7 +266,7 @@ impl State {
         );
         self.renderer.update_lights(&mut self.queue, &self.lights);
         self.renderer.update_upsampler(&self.device, &mut self.queue, &self.gui.upsampler);
-        self.renderer.render(&mut self.device, &mut self.queue, &mut encoder, &view);
+        self.renderer.render(&mut self.device, &mut self.queue, &mut encoder, &self.sdf, &view);
         
         self.gui.render(&mut self.device, &mut self.queue, &mut encoder, &view);
 

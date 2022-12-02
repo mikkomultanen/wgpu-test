@@ -1,5 +1,5 @@
 mod light_map;
-mod texture;
+pub mod texture;
 mod taa;
 mod blit_sampler;
 pub mod light;
@@ -11,6 +11,7 @@ use wgpu::util::DeviceExt;
 use light_map::LightMapRenderer;
 
 use crate::renderer::light::{LightData, LightsConfig};
+use crate::sdf::SDF;
 
 pub const MAX_LIGHTS: usize = 1024;
 const NUM_SUBPIXEL_JITTER_SAMPLES: usize = 16;
@@ -105,7 +106,6 @@ pub struct Renderer {
     lights_buffer: wgpu::Buffer,
     lights_config_buffer: wgpu::Buffer,
     lights_bind_group: wgpu::BindGroup,
-    sdf_bind_group: wgpu::BindGroup,
     light_map_renderer: LightMapRenderer,
     lightmap_sampler: wgpu::Sampler,    
     lightmap_bind_group_layout: wgpu::BindGroupLayout,
@@ -129,7 +129,7 @@ pub struct Renderer {
 const COLOR_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 
 impl Renderer {
-    pub fn new(render_resolution: Vector2<u32>, output_resolution: Vector2<u32>, world_size: Vector2<f32>, device: &wgpu::Device, queue: &mut wgpu::Queue, sdf_view: &wgpu::TextureView, sdf_sampler: &wgpu::Sampler, surface_format: &wgpu::TextureFormat) -> Self {
+    pub fn new(render_resolution: Vector2<u32>, output_resolution: Vector2<u32>, world_size: Vector2<f32>, device: &wgpu::Device, queue: &mut wgpu::Queue, sdf: &SDF, surface_format: &wgpu::TextureFormat) -> Self {
         let mut view_size = Vector2::new(world_size.x, world_size.y);
         view_size.x = view_size.y * output_resolution.x as f32 / output_resolution.y as f32;
 
@@ -171,47 +171,6 @@ impl Renderer {
             ],
             label: Some("uniform_bind_group"),
         });
-
-        let sdf_bind_group_layout = device.create_bind_group_layout(
-            &wgpu::BindGroupLayoutDescriptor {
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            multisampled: false,
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                ],
-                label: Some("sdf_texture_bind_group_layout"),
-            }
-        );
-
-        let sdf_bind_group = device.create_bind_group(
-            &wgpu::BindGroupDescriptor {
-                layout: &sdf_bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(sdf_view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(sdf_sampler),
-                    }
-                ],
-                label: Some("sdf_bind_group"),
-            }
-        );
 
         let initial_lights_data = vec![LightData::default(); MAX_LIGHTS];
         let lights_config = LightsConfig { num_lights: 0, };
@@ -269,7 +228,7 @@ impl Renderer {
             label: None,
         });
 
-        let light_map_renderer = LightMapRenderer::new(render_resolution, device, queue, &uniform_bind_group_layout, &sdf_bind_group_layout, &lights_bind_group_layout);
+        let light_map_renderer = LightMapRenderer::new(render_resolution, device, queue, &uniform_bind_group_layout, &sdf.sdf_bind_group_layout, &lights_bind_group_layout);
 
         let lightmap_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: None,
@@ -439,7 +398,7 @@ impl Renderer {
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Renderer Render Pipeline Layout"),
-                bind_group_layouts: &[&uniform_bind_group_layout, &sdf_bind_group_layout, &upsampler_output_bind_group_layout],
+                bind_group_layouts: &[&uniform_bind_group_layout, &sdf.sdf_bind_group_layout, &upsampler_output_bind_group_layout],
                 push_constant_ranges: &[],
             });
 
@@ -485,7 +444,6 @@ impl Renderer {
             lights_buffer,
             lights_config_buffer,
             lights_bind_group,
-            sdf_bind_group,
             light_map_renderer,
             lightmap_sampler,
             lightmap_bind_group_layout,
@@ -572,9 +530,9 @@ impl Renderer {
         queue.write_buffer(&self.lights_config_buffer, 0, bytemuck::cast_slice(&[LightsConfig { num_lights: lights.len() as u32 }]));
     }
 
-    pub fn render(&mut self, device: &wgpu::Device, queue: &mut wgpu::Queue, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
+    pub fn render(&mut self, device: &wgpu::Device, queue: &mut wgpu::Queue, encoder: &mut wgpu::CommandEncoder, sdf: &SDF, view: &wgpu::TextureView) {
         queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[self.uniforms]));
-        self.light_map_renderer.render(device, queue, encoder, &self.uniform_bind_group, &self.sdf_bind_group, &self.lights_bind_group);
+        self.light_map_renderer.render(device, queue, encoder, &self.uniform_bind_group, sdf.output_bind_group(), &self.lights_bind_group);
         {
             // Denoising and diffuse lighting pass
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -628,7 +586,7 @@ impl Renderer {
             });
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
-            render_pass.set_bind_group(1, &self.sdf_bind_group, &[]);
+            render_pass.set_bind_group(1, sdf.output_bind_group(), &[]);
             render_pass.set_bind_group(2, &self.upsampler.output_bind_group(), &[]);
             render_pass.draw(0..3, 0..1);
         }

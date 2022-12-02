@@ -1,54 +1,50 @@
 use cgmath::*;
 use wgpu::util::DeviceExt;
 
+use crate::renderer::texture;
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Zeroable, bytemuck::Pod)]
 struct Uniforms {
-    pub mouse: [f32; 2],
-    pub size: [f32; 2],
-    pub cursor_size: f32,
-    pub dummy: f32,
+    pub world_pos: [f32; 2],
+    pub world_size: [f32; 2],
+    pub inv_world_size: [f32; 2],
+    pub radius: f32,
+    pub smoothness: f32,
 }
 
 impl Default for Uniforms {
     fn default() -> Uniforms {
         Uniforms {
-            mouse: [0.0, 0.0],
-            size: [1.0, 1.0],
-            cursor_size: 20.0,
-            dummy: 0.0,
+            world_pos: [0.0, 0.0],
+            world_size: [1.0, 1.0],
+            inv_world_size: [1.0, 1.0],
+            radius: 10.0,
+            smoothness: 1.0,
         }
     }
 }
 
 pub struct SDF {
-    pub view: wgpu::TextureView,
-    pub sampler: wgpu::Sampler,
+    textures: [texture::Texture; 2],
     pipeline: wgpu::RenderPipeline,
     subtract_pipeline: wgpu::RenderPipeline,
     uniforms: Uniforms,
     uniform_buffer: wgpu::Buffer,
     uniform_bind_group: wgpu::BindGroup,
+    texture_index: usize,
+    pub sdf_bind_group_layout: wgpu::BindGroupLayout,
+    sdf_bind_groups: [wgpu::BindGroup; 2],
 }
 
 const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R16Float;
 
 impl SDF {
     pub fn new(size: cgmath::Vector2<u32>, world_size: cgmath::Vector2<f32>, device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
-            size: wgpu::Extent3d {
-                width: size.x,
-                height: size.y,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: TEXTURE_FORMAT,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-            label: Some("SDF"),
-        });
-        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let textures = [
+            texture::Texture::new_intermediate(device, size, TEXTURE_FORMAT),
+            texture::Texture::new_intermediate(device, size, TEXTURE_FORMAT),
+        ];
 
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Init SDF"),
@@ -63,7 +59,7 @@ impl SDF {
                 label: Some("Render Pass"),
                 color_attachments: &[
                     Some(wgpu::RenderPassColorAttachment {
-                        view: &view,
+                        view: &textures[0].view,
                         resolve_target: None,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -77,7 +73,7 @@ impl SDF {
                     })
                 ],
                 depth_stencil_attachment: None,
-            });
+            });                    
         }
     
         queue.submit(std::iter::once(encoder.finish()));
@@ -109,14 +105,44 @@ impl SDF {
                 ],
             });
 
+        let sdf_bind_group_layout = device.create_bind_group_layout(
+            &wgpu::BindGroupLayoutDescriptor {
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+                label: Some("sdf_texture_bind_group_layout"),
+            }
+        );
+    
+        let sdf_bind_groups = [
+            Self::create_output_bind_group(device, &sdf_bind_group_layout, &textures[0].view, &sampler),
+            Self::create_output_bind_group(device, &sdf_bind_group_layout, &textures[1].view, &sampler),
+        ];
+    
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("SDF"),
-            bind_group_layouts: &[&bind_group_layout],
+            bind_group_layouts: &[&bind_group_layout, &sdf_bind_group_layout],
             push_constant_ranges: &[],
         });
 
         let mut uniforms = Uniforms::default();
-        uniforms.size = [world_size.x, world_size.y];
+        uniforms.world_size = [world_size.x, world_size.y];
+        uniforms.inv_world_size = [1. / world_size.x, 1. / world_size.y];
 
         let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Uniform Buffer"),
@@ -151,18 +177,7 @@ impl SDF {
                 entry_point: "main_frag",
                 targets: &[Some(wgpu::ColorTargetState {
                     format: TEXTURE_FORMAT,
-                    blend: Some(wgpu::BlendState {
-                        color: wgpu::BlendComponent {
-                            src_factor: wgpu::BlendFactor::One,
-                            dst_factor: wgpu::BlendFactor::One,
-                            operation: wgpu::BlendOperation::Min,
-                        },
-                        alpha: wgpu::BlendComponent {
-                            src_factor: wgpu::BlendFactor::One,
-                            dst_factor: wgpu::BlendFactor::One,
-                            operation: wgpu::BlendOperation::Min,
-                        },
-                    }),
+                    blend: Some(wgpu::BlendState::REPLACE),
                     write_mask: wgpu::ColorWrites::RED,
                 })],
             }),
@@ -194,18 +209,7 @@ impl SDF {
                 entry_point: "main_frag_subtract",
                 targets: &[Some(wgpu::ColorTargetState {
                     format: TEXTURE_FORMAT,
-                    blend: Some(wgpu::BlendState {
-                        color: wgpu::BlendComponent {
-                            src_factor: wgpu::BlendFactor::One,
-                            dst_factor: wgpu::BlendFactor::One,
-                            operation: wgpu::BlendOperation::Max,
-                        },
-                        alpha: wgpu::BlendComponent {
-                            src_factor: wgpu::BlendFactor::One,
-                            dst_factor: wgpu::BlendFactor::One,
-                            operation: wgpu::BlendOperation::Max,
-                        },
-                    }),
+                    blend: Some(wgpu::BlendState::REPLACE),
                     write_mask: wgpu::ColorWrites::RED,
                 })],
             }),
@@ -225,27 +229,49 @@ impl SDF {
         });
 
         return Self {
-            view,
-            sampler,
+            textures,
             pipeline,
             subtract_pipeline,
             uniforms,
             uniform_buffer,
+            texture_index: 0,
             uniform_bind_group,
+            sdf_bind_group_layout,
+            sdf_bind_groups,
         }
     }
 
+    fn create_output_bind_group(device: &wgpu::Device, layout: &wgpu::BindGroupLayout, view: &wgpu::TextureView, sampler: &wgpu::Sampler) -> wgpu::BindGroup {
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+            ],
+            label: None,
+        })
+    }
+
     pub fn add(&mut self, mouse: Point2<f32>, cursor_size: f32, queue: &wgpu::Queue, encoder: &mut wgpu::CommandEncoder) {
-        self.uniforms.mouse = mouse.into();
-        self.uniforms.cursor_size = cursor_size;
+        self.uniforms.world_pos = mouse.into();
+        self.uniforms.radius = 0.25 * cursor_size;
+        self.uniforms.smoothness = 0.25 * cursor_size;
         queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[self.uniforms]));
 
+        let sdf_bind_group = &mut self.sdf_bind_groups[self.texture_index];
+        self.texture_index = (self.texture_index + 1) % 2;
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[
                     Some(wgpu::RenderPassColorAttachment {
-                        view: &self.view,
+                        view: &self.textures[self.texture_index].view,
                         resolve_target: None,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Load,
@@ -257,21 +283,25 @@ impl SDF {
             });
             render_pass.set_pipeline(&self.pipeline);
             render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
+            render_pass.set_bind_group(1, &sdf_bind_group, &[]);
             render_pass.draw(0..3, 0..1);
         }
     }
 
     pub fn subtract(&mut self, mouse: Point2<f32>, cursor_size: f32, queue: &wgpu::Queue, encoder: &mut wgpu::CommandEncoder) {
-        self.uniforms.mouse = [mouse.x, mouse.y];
-        self.uniforms.cursor_size = cursor_size;
+        self.uniforms.world_pos = [mouse.x, mouse.y];
+        self.uniforms.radius = 0.25 * cursor_size;
+        self.uniforms.smoothness = 0.25 * cursor_size;
         queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[self.uniforms]));
 
+        let sdf_bind_group = &mut self.sdf_bind_groups[self.texture_index];
+        self.texture_index = (self.texture_index + 1) % 2;
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[
                     Some(wgpu::RenderPassColorAttachment {
-                        view: &self.view,
+                        view: &self.textures[self.texture_index].view,
                         resolve_target: None,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Load,
@@ -283,7 +313,12 @@ impl SDF {
             });
             render_pass.set_pipeline(&self.subtract_pipeline);
             render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
+            render_pass.set_bind_group(1, &sdf_bind_group, &[]);
             render_pass.draw(0..3, 0..1);
         }
+    }
+
+    pub fn output_bind_group(&self) -> &wgpu::BindGroup {
+        &self.sdf_bind_groups[self.texture_index]
     }
 }
