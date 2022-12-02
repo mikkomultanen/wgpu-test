@@ -241,7 +241,7 @@ fn softShadow(p: vec2<f32>, lightDir: vec2<f32>, lightDistance: f32, radius: f32
 
 fn wrap(p: vec2<f32>) -> vec2<f32> 
 {
-    let s = ceil(abs(p / uniforms.world_size)) + 0.5;
+    let s = ceil(abs(p * uniforms.inv_world_size)) + 0.5;
     return (p + s * uniforms.world_size) % uniforms.world_size - 0.5 * uniforms.world_size;
 }
 
