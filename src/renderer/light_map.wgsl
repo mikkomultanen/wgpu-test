@@ -180,7 +180,24 @@ struct LightsConfig {
 @group(2) @binding(1)
 var<uniform> lightsConfig: LightsConfig;
 
+struct ShapeData {
+    data0: vec4<u32>,
+    data1: vec4<f32>,
+};
+
+struct ShapesBuffer {
+    shapes: array<ShapeData>,
+};
 @group(3) @binding(0)
+var<storage, read> shapesBuffer: ShapesBuffer;
+
+struct ShapesConfig {
+  numShapes : u32,
+};
+@group(3) @binding(1)
+var<uniform> shapesConfig: ShapesConfig;
+
+@group(4) @binding(0)
 var t_blue_noise: texture_2d<f32>;
 
 fn unpackSdf(v: f32) -> f32 {
@@ -424,6 +441,42 @@ fn shadow_pbr(p_screen: vec2<f32>, p: vec2<f32>, pos: vec2<f32>, radius: f32) ->
 	return traceShadow(p_screen, p, pos, lightDir, ld, radius);
 }
 
+let kMaxRayDistance: f32 = 100000000.0;
+
+struct RayTraceResult {
+    p: vec3<f32>,
+    normal: vec3<f32>,
+    color: vec4<f32>,
+    metallic: f32,
+    roughness: f32,
+}
+
+fn raySphereIntersect(ro: vec3<f32>, rd: vec3<f32>, so: vec3<f32>, sr: f32) -> f32 {
+    let a = dot(rd, rd);
+    let so_ro = ro - so;
+    let b = 2.0 * dot(rd, so_ro);
+    let c = dot(so_ro, so_ro) - (sr * sr);
+    let delta = b*b - 4.0*a*c;
+    if (delta < 0.0) {
+        return kMaxRayDistance;
+    }
+    return (-b - sqrt(delta))/(2.0*a);
+}
+
+fn rayShapeIntersect(ro: vec3<f32>, rd: vec3<f32>, shapeIndex: u32) -> RayTraceResult {
+    let shape = shapesBuffer.shapes[shapeIndex];
+    let t = raySphereIntersect(ro, rd, shape.data1.xyz, shape.data1.w);
+    let p = ro + t*rd;
+    let params = unpack4x8unorm(shape.data0.z);
+    return RayTraceResult(
+        p,
+        normalize(p - shape.data1.xyz),
+        unpack4x8unorm(shape.data0.y),
+        params.x,
+        params.y,
+    ); 
+}
+
 @fragment
 fn main_frag_pbr(in: VertexOutput) -> @location(0) vec4<f32> {
     let offset = vec3<f32>(0.5 * uniforms.pixel_size.xy, 0.);
@@ -439,19 +492,38 @@ fn main_frag_pbr(in: VertexOutput) -> @location(0) vec4<f32> {
 //    let WorldPos = vec3<f32>(in.world_pos, 2. * t * t);
 //    let N = mix(normalize(vec3<f32>(distN, -1.)), vec3<f32>(0., 0., -1.), step(-dist, 0.));
 //    let WorldPos = vec3<f32>(in.world_pos, 2. * step(-dist, 0.));
-    let N = vec3<f32>(0., 0., -1.);
-    let WorldPos = vec3<f32>(in.world_pos, 2.);
+    var N = vec3<f32>(0., 0., -1.);
+    var WorldPos = vec3<f32>(in.world_pos, 20.);
 
     var albedo: vec3<f32>;
+    var metallic: f32;
+    var roughness: f32;
+
     if (dist < 0.) {
         albedo = vec3<f32>(1.0, 0.4, 0.0);
+        metallic = 0.;
+        roughness = 1.;
     } else {
         albedo = vec3<f32>(1., 1., 1.);
+        metallic = 1.;
+        roughness = 0.5;
     }
     let patternMask = clamp(dot(floor((abs(in.world_pos) + 2.0) / 4.0), vec2<f32>(1.0)) % 2.0, 0.8, 1.0);
     albedo = albedo * patternMask;
-    let metallic = 0.;
-    let roughness = .5;
+
+    if (dist > 0.) {
+        for (var i = 0u; i < shapesConfig.numShapes; i = i + 1u) {
+            let result = rayShapeIntersect(vec3<f32>(in.world_pos, -1000.0), vec3<f32>(0., 0., 1.), i);
+            if (result.p.z < WorldPos.z) {
+                N = result.normal;
+                WorldPos = result.p;
+                albedo = result.color.xyz;
+                metallic = result.metallic;
+                roughness = result.roughness;
+            }
+        }
+    }
+
     let ao = 1.0;
 
     var F0 = vec3<f32>(.04, .04, .04); 

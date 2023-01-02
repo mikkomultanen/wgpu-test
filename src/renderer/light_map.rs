@@ -12,7 +12,7 @@ pub struct LightMapRenderer {
 const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 
 impl LightMapRenderer {
-    pub fn new(resolution: Vector2<u32>, device: &wgpu::Device, queue: &mut wgpu::Queue, uniform_bind_group_layout: &wgpu::BindGroupLayout, sdf_bind_group_layout: &wgpu::BindGroupLayout, lights_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
+    pub fn new(resolution: Vector2<u32>, device: &wgpu::Device, queue: &mut wgpu::Queue, uniform_bind_group_layout: &wgpu::BindGroupLayout, sdf_bind_group_layout: &wgpu::BindGroupLayout, lights_bind_group_layout: &wgpu::BindGroupLayout, shapes_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
         let blue_noise_bind_group_layout = device.create_bind_group_layout(
             &wgpu::BindGroupLayoutDescriptor {
                 entries: &[
@@ -71,7 +71,7 @@ impl LightMapRenderer {
         let lightmap_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Lightmap Render Pipeline Layout"),
-                bind_group_layouts: &[uniform_bind_group_layout, sdf_bind_group_layout, lights_bind_group_layout, &blue_noise_bind_group_layout],
+                bind_group_layouts: &[uniform_bind_group_layout, sdf_bind_group_layout, lights_bind_group_layout, shapes_bind_group_layout, &blue_noise_bind_group_layout],
                 push_constant_ranges: &[],
             });
 
@@ -135,7 +135,7 @@ impl LightMapRenderer {
         self.lightmap_view = lightmap_texture.create_view(&wgpu::TextureViewDescriptor::default());
     }
 
-    pub fn render(&mut self, _device: &wgpu::Device, _queue: &mut wgpu::Queue, encoder: &mut wgpu::CommandEncoder, uniform_bind_group: &wgpu::BindGroup, sdf_bind_group: &wgpu::BindGroup, lights_bind_group: &wgpu::BindGroup) {
+    pub fn render(&mut self, _device: &wgpu::Device, _queue: &mut wgpu::Queue, encoder: &mut wgpu::CommandEncoder, uniform_bind_group: &wgpu::BindGroup, sdf_bind_group: &wgpu::BindGroup, lights_bind_group: &wgpu::BindGroup, shapes_bind_group: &wgpu::BindGroup) {
         self.blue_noise_index = (self.blue_noise_index + 1) % self.blue_noise_textures.len();
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -161,7 +161,8 @@ impl LightMapRenderer {
             render_pass.set_bind_group(0, uniform_bind_group, &[]);
             render_pass.set_bind_group(1, sdf_bind_group, &[]);
             render_pass.set_bind_group(2, lights_bind_group, &[]);
-            render_pass.set_bind_group(3, &self.blue_noise_textures[self.blue_noise_index], &[]);
+            render_pass.set_bind_group(3, shapes_bind_group, &[]);
+            render_pass.set_bind_group(4, &self.blue_noise_textures[self.blue_noise_index], &[]);
             render_pass.draw(0..3, 0..1);
         }
     }

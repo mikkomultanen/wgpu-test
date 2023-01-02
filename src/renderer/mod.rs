@@ -3,6 +3,7 @@ pub mod texture;
 mod taa;
 mod blit_sampler;
 pub mod light;
+pub mod shape;
 
 use cgmath::*;
 use std::time::Instant;
@@ -11,9 +12,11 @@ use wgpu::util::DeviceExt;
 use light_map::LightMapRenderer;
 
 use crate::renderer::light::{LightData, LightsConfig};
+use crate::renderer::shape::{ShapeData, ShapesConfig};
 use crate::sdf::SDF;
 
 pub const MAX_LIGHTS: usize = 1024;
+pub const MAX_SHAPES: usize = 65536;
 const NUM_SUBPIXEL_JITTER_SAMPLES: usize = 16;
 
 fn halton(base: usize, index: usize) -> f32 {
@@ -106,6 +109,9 @@ pub struct Renderer {
     lights_buffer: wgpu::Buffer,
     lights_config_buffer: wgpu::Buffer,
     lights_bind_group: wgpu::BindGroup,
+    shapes_buffer: wgpu::Buffer,
+    shapes_config_buffer: wgpu::Buffer,
+    shapes_bind_group: wgpu::BindGroup,
     light_map_renderer: LightMapRenderer,
     lightmap_sampler: wgpu::Sampler,    
     lightmap_bind_group_layout: wgpu::BindGroupLayout,
@@ -228,7 +234,63 @@ impl Renderer {
             label: None,
         });
 
-        let light_map_renderer = LightMapRenderer::new(render_resolution, device, queue, &uniform_bind_group_layout, &sdf.sdf_bind_group_layout, &lights_bind_group_layout);
+        let initial_shapes_data = vec![ShapeData::default(); MAX_SHAPES];
+        let shapes_config = ShapesConfig { num_shapes: 0, };
+
+        let shapes_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: None,
+            contents: bytemuck::cast_slice(&initial_shapes_data),
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST
+        });
+
+        let shapes_config_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: None,
+            contents: bytemuck::cast_slice(&[shapes_config]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            });
+
+        let shapes_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    count: None,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    count: None,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                },
+            ]
+        });
+
+        let shapes_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &shapes_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: shapes_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: shapes_config_buffer.as_entire_binding(),
+                },
+            ],
+            label: None,
+        });
+
+        let light_map_renderer = LightMapRenderer::new(render_resolution, device, queue, &uniform_bind_group_layout, &sdf.sdf_bind_group_layout, &lights_bind_group_layout, &shapes_bind_group_layout);
 
         let lightmap_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: None,
@@ -444,6 +506,9 @@ impl Renderer {
             lights_buffer,
             lights_config_buffer,
             lights_bind_group,
+            shapes_buffer,
+            shapes_config_buffer,
+            shapes_bind_group,
             light_map_renderer,
             lightmap_sampler,
             lightmap_bind_group_layout,
@@ -530,9 +595,14 @@ impl Renderer {
         queue.write_buffer(&self.lights_config_buffer, 0, bytemuck::cast_slice(&[LightsConfig { num_lights: lights.len() as u32 }]));
     }
 
+    pub fn update_shapes(&mut self, queue: &mut wgpu::Queue, shapes: &Vec<ShapeData>) {
+        queue.write_buffer(&self.shapes_buffer, 0, bytemuck::cast_slice(shapes));
+        queue.write_buffer(&self.shapes_config_buffer, 0, bytemuck::cast_slice(&[ShapesConfig { num_shapes: shapes.len() as u32 }]));
+    }
+
     pub fn render(&mut self, device: &wgpu::Device, queue: &mut wgpu::Queue, encoder: &mut wgpu::CommandEncoder, sdf: &SDF, view: &wgpu::TextureView) {
         queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[self.uniforms]));
-        self.light_map_renderer.render(device, queue, encoder, &self.uniform_bind_group, sdf.output_bind_group(), &self.lights_bind_group);
+        self.light_map_renderer.render(device, queue, encoder, &self.uniform_bind_group, sdf.output_bind_group(), &self.lights_bind_group, &self.shapes_bind_group);
         {
             // Denoising and diffuse lighting pass
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

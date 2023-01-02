@@ -10,6 +10,7 @@ use winit::{
     window::{Window, WindowBuilder}
 };
 use renderer::light::LightData;
+use renderer::shape::ShapeData;
 
 const WINDOW_SIZE: winit::dpi::LogicalSize<u32> = winit::dpi::LogicalSize::new(1280, 720);
 const WORLD_SIZE: Vector2<f32> = Vector2::new(1280.0, 720.0);
@@ -27,6 +28,7 @@ struct State {
     sdf: sdf::SDF,
     renderer: renderer::Renderer,
     lights: Vec<LightData>,
+    shapes: Vec<ShapeData>,
     mouse_pos: Point2<f32>,
     add_pressed: bool,
     subtract_pressed: bool,
@@ -37,6 +39,7 @@ struct State {
     zoom_in_pressed: bool,
     zoom_out_pressed: bool,
     add_light_pressed: bool,
+    add_shape_pressed: bool,
 }
 
 impl State {
@@ -57,7 +60,10 @@ impl State {
         let (device, mut queue) = adapter.request_device(
             &wgpu::DeviceDescriptor {
                 features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
-                limits: wgpu::Limits::default(),
+                limits: wgpu::Limits {
+                    max_bind_groups: 8,
+                    ..Default::default()
+                },
                 label: None,
             },
             None,
@@ -69,6 +75,8 @@ impl State {
 
         let mut lights = Vec::new();
         lights.push(LightData::new([1., 1., 1.], [0., 0.], 10., 10. / 40. * 0.5 * WORLD_SIZE.x));
+        let mut shapes = Vec::new();
+        shapes.push(ShapeData::sphere());
 
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -83,6 +91,7 @@ impl State {
 
         let mut gui = gui::GUI::new(window, &device, &surface_format);
         gui.update_lights(lights.len());
+        gui.update_shapes(shapes.len());
 
         let renderer_scale = gui.renderer_scale;
         let render_resolution = Vector2::new(
@@ -106,6 +115,7 @@ impl State {
             sdf,
             renderer,
             lights,
+            shapes,
             mouse_pos: Point2::origin(),
             add_pressed: false,
             subtract_pressed: false,
@@ -116,6 +126,7 @@ impl State {
             zoom_in_pressed: false,
             zoom_out_pressed: false,
             add_light_pressed: false,
+            add_shape_pressed: false,
         }
     }
 
@@ -175,6 +186,7 @@ impl State {
                     Some(VirtualKeyCode::Z) => { self.zoom_in_pressed = pressed; true },
                     Some(VirtualKeyCode::X) => { self.zoom_out_pressed = pressed; true },
                     Some(VirtualKeyCode::L) => { self.add_light_pressed = pressed; true },
+                    Some(VirtualKeyCode::O) => { self.add_shape_pressed = pressed; true },
                     _ => false,
                 }
             }
@@ -201,6 +213,14 @@ impl State {
             if self.lights.len() < renderer::MAX_LIGHTS {
                 self.lights.push(self.lights[0].clone());
                 self.gui.update_lights(self.lights.len());
+            }
+        }
+
+        if self.add_shape_pressed {
+            self.add_shape_pressed = false;
+            if self.shapes.len() < renderer::MAX_SHAPES {
+                self.shapes.push(self.shapes[0].clone());
+                self.gui.update_shapes(self.shapes.len());
             }
         }
     }
@@ -239,7 +259,14 @@ impl State {
             self.gui.light_color(), 
             [mouse_world_pos.x, mouse_world_pos.y],
             self.gui.light_radius,
-            (self.gui.light_range * 0.5 * WORLD_SIZE.x).max(self.gui.light_radius),
+            (self.gui.light_range * 0.5 * WORLD_SIZE.x.min(WORLD_SIZE.y)).max(self.gui.light_radius),
+        );
+        self.shapes[0].update_sphere(
+            self.gui.shape_color,
+            self.gui.shape_metallic,
+            self.gui.shape_roughness,
+            mouse_world_pos.to_vec().extend(20. - self.gui.shape_radius),
+            self.gui.shape_radius,
         );
 
         if self.add_pressed {
@@ -265,6 +292,7 @@ impl State {
             self.gui.exposure,
         );
         self.renderer.update_lights(&mut self.queue, &self.lights);
+        self.renderer.update_shapes(&mut self.queue, &self.shapes);
         self.renderer.update_upsampler(&self.device, &mut self.queue, &self.gui.upsampler);
         self.renderer.render(&mut self.device, &mut self.queue, &mut encoder, &self.sdf, &view);
         
