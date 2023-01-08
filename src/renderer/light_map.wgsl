@@ -429,8 +429,6 @@ fn fresnelSchlick(cosTheta: f32, F0: vec3<f32>) -> vec3<f32>
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
-let V: vec3<f32> = vec3<f32>(0., 0., -1.);
-
 fn shadow_pbr(p_screen: vec2<f32>, p: vec2<f32>, pos: vec2<f32>, radius: f32) -> f32 {
     let d = wrap(p - pos);
 	// distance to light
@@ -443,38 +441,45 @@ fn shadow_pbr(p_screen: vec2<f32>, p: vec2<f32>, pos: vec2<f32>, radius: f32) ->
 
 let kMaxRayDistance: f32 = 100000000.0;
 
-struct RayTraceResult {
-    p: vec3<f32>,
-    normal: vec3<f32>,
-    color: vec4<f32>,
-    metallic: f32,
-    roughness: f32,
-}
-
-fn raySphereIntersect(ro: vec3<f32>, rd: vec3<f32>, so: vec3<f32>, sr: f32) -> f32 {
-    let a = dot(rd, rd);
-    let so_ro = ro - so;
-    let b = 2.0 * dot(rd, so_ro);
-    let c = dot(so_ro, so_ro) - (sr * sr);
-    let delta = b*b - 4.0*a*c;
-    if (delta < 0.0) {
+fn iSphere(ro: vec3<f32>, rd: vec3<f32>, radius: f32) -> f32 {
+    let b = dot(rd, ro);
+    let c = dot(ro, ro) - (radius * radius);
+    let h = b*b - c;
+    if (h < 0.0) {
         return kMaxRayDistance;
     }
-    return (-b - sqrt(delta))/(2.0*a);
+    return -b - sqrt(h);
 }
 
-fn rayShapeIntersect(ro: vec3<f32>, rd: vec3<f32>, shapeIndex: u32) -> RayTraceResult {
-    let shape = shapesBuffer.shapes[shapeIndex];
-    let t = raySphereIntersect(ro, rd, shape.data1.xyz, shape.data1.w);
-    let p = ro + t*rd;
-    let params = unpack4x8unorm(shape.data0.z);
+fn nSphere(pos: vec3<f32>) -> vec3<f32> {
+    return normalize(pos);
+}
+
+struct RayTraceResult {
+    t: f32,
+    normal: vec3<f32>,
+    shapeIndex: u32,
+}
+
+fn traceRay(ro: vec3<f32>, rd: vec3<f32>, tmax: f32) -> RayTraceResult {
+    var tmin = tmax;
+    var normal = vec3<f32>(.0, .0, -1.0);
+    var shapeIndex = shapesConfig.numShapes;
+    for (var i = 0u; i < shapesConfig.numShapes; i = i + 1u) {
+        let s = shapesBuffer.shapes[i];
+        let oro = ro - s.data1.xyz;
+        let t = iSphere(oro, rd, s.data1.w);
+        if (t < tmin) {
+            tmin = t;
+            normal = nSphere(oro + t * rd);
+            shapeIndex = i;
+        }
+    }
     return RayTraceResult(
-        p,
-        normalize(p - shape.data1.xyz),
-        unpack4x8unorm(shape.data0.y),
-        params.x,
-        params.y,
-    ); 
+        tmin,
+        normal,
+        shapeIndex,
+    );
 }
 
 @fragment
@@ -492,6 +497,8 @@ fn main_frag_pbr(in: VertexOutput) -> @location(0) vec4<f32> {
 //    let WorldPos = vec3<f32>(in.world_pos, 2. * t * t);
 //    let N = mix(normalize(vec3<f32>(distN, -1.)), vec3<f32>(0., 0., -1.), step(-dist, 0.));
 //    let WorldPos = vec3<f32>(in.world_pos, 2. * step(-dist, 0.));
+    let RO = vec3<f32>(in.world_pos, -1000.0);
+    let RD = vec3<f32>(0., 0., 1.);
     var N = vec3<f32>(0., 0., -1.);
     var WorldPos = vec3<f32>(in.world_pos, 20.);
 
@@ -512,15 +519,15 @@ fn main_frag_pbr(in: VertexOutput) -> @location(0) vec4<f32> {
     albedo = albedo * patternMask;
 
     if (dist > 0.) {
-        for (var i = 0u; i < shapesConfig.numShapes; i = i + 1u) {
-            let result = rayShapeIntersect(vec3<f32>(in.world_pos, -1000.0), vec3<f32>(0., 0., 1.), i);
-            if (result.p.z < WorldPos.z) {
-                N = result.normal;
-                WorldPos = result.p;
-                albedo = result.color.xyz;
-                metallic = result.metallic;
-                roughness = result.roughness;
-            }
+        let result = traceRay(RO, RD, WorldPos.z - RO.z);
+        if (result.shapeIndex < shapesConfig.numShapes) {
+            N = result.normal;
+            WorldPos = RO + result.t * RD;
+            let shape = shapesBuffer.shapes[result.shapeIndex];
+            albedo = unpack4x8unorm(shape.data0.y).xyz;
+            let params = unpack4x8unorm(shape.data0.z);
+            metallic = params.x;
+            roughness = params.y;
         }
     }
 
@@ -532,17 +539,22 @@ fn main_frag_pbr(in: VertexOutput) -> @location(0) vec4<f32> {
     // reflectance equation
     var Lo = vec3<f32>(0., 0., 0.);
 
+    let NdotNegRDx4 = max(dot(N, -RD), 0.) * 4.;
+
     for (var i = 0u; i < lightsConfig.numLights; i = i + 1u) {
         let light = lightsBuffer.lights[i];
         // calculate per-light radiance
         let l = vec3<f32>(wrap(light.position - WorldPos.xy), 0. - WorldPos.z);
 
-        let r = reflect(-V, N);
+        let r = reflect(RD, N);
         let centerToRay = (dot(l, r) * r) - l;
-        let centerToRayLength = length(centerToRay);
         let closestPoint = l + centerToRay * clamp(light.radius / length(centerToRay), 0., 1.);
-        let L = normalize(closestPoint);
         let distance = length(closestPoint);
+        let L = closestPoint / distance;
+        let NdotL = dot(N, L);
+        if (NdotL <= 0.) {
+            continue;
+        }
 
         let effectiveRange = max(light.range - light.radius, 0.);
         if (distance > effectiveRange) {
@@ -556,27 +568,28 @@ fn main_frag_pbr(in: VertexOutput) -> @location(0) vec4<f32> {
             step(distanceToSurface, 0.), 
             step(0., dist)
         );
+        if (shadow == 0.) {
+            continue;
+        }
         let radiance = light.color.rgb * shadow * falloff;
 
         //let attenuation = 1.0 / (distance * distance);
         //let radiance     = light.color.rgb * attenuation;        
-        let H = normalize(V + L);
+        let H = normalize(-RD + L);
         
         // cook-torrance brdf
         let NDF = DistributionGGX(N, H, roughness, distance, light.radius);
-        let G   = GeometrySmith(N, V, L, roughness);      
-        let F   = fresnelSchlick(max(dot(H, V), 0.0), F0);       
+        let G   = GeometrySmith(N, -RD, L, roughness);      
+        let F   = fresnelSchlick(max(dot(H, -RD), 0.0), F0);       
         
         let kS = F;
         let kD = (vec3<f32>(1., 1., 1.) - kS) * (1.0 - metallic);
         
         let numerator    = NDF * G * F;
-        let denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
+        let denominator  = NdotNegRDx4 * NdotL + 0.0001;
         let specular     = numerator / denominator;  
             
         // add to outgoing radiance Lo
-        let NdotL = max(dot(N, L), 0.0);                
-
         Lo = Lo + (kD  / PI + specular) * radiance * NdotL; 
     }
 
