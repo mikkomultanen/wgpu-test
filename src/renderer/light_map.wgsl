@@ -550,7 +550,7 @@ fn main_frag_pbr(in: VertexOutput) -> @location(0) vec4<f32> {
         let centerToRay = (dot(l, r) * r) - l;
         let closestPoint = l + centerToRay * clamp(light.radius / length(centerToRay), 0., 1.);
         let distance = length(closestPoint);
-        let L = closestPoint / distance;
+        let L = closestPoint * (1. / distance);
         let NdotL = dot(N, L);
         if (NdotL <= 0.) {
             continue;
@@ -560,8 +560,8 @@ fn main_frag_pbr(in: VertexOutput) -> @location(0) vec4<f32> {
         if (distance > effectiveRange) {
             continue;
         }
-        //let falloff = pow(clamp(1. - pow(distance/effectiveRange, 4.), 0., 1.), 2.) / ((distance * distance) + 1.);
-        let falloff = pow((effectiveRange - distance) / effectiveRange, 2.);
+        let falloff = pow(clamp(1. - pow(distance/effectiveRange, 4.), 0., 1.), 2.) / ((distance * distance) + 1.);
+        //let falloff = pow((effectiveRange - distance) / effectiveRange, 2.);
         let distanceToSurface = shadow_pbr(in.position.xy, WorldPos.xy, light.position, light.radius);
         let shadow = mix(
             smoothstep(10., 0., distanceToSurface), 
