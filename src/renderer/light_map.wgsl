@@ -385,6 +385,7 @@ fn main_frag(in: VertexOutput) -> @location(0) vec4<f32> {
 }
 
 let PI: f32 = 3.14159265359;
+let TwoPI: f32 = 6.28318530718;
 
 fn DistributionGGX(N: vec3<f32>, H: vec3<f32>, roughness: f32, distance: f32, radius: f32) -> f32
 {
@@ -429,14 +430,19 @@ fn fresnelSchlick(cosTheta: f32, F0: vec3<f32>) -> vec3<f32>
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
-fn shadow_pbr(p_screen: vec2<f32>, p: vec2<f32>, pos: vec2<f32>, radius: f32) -> f32 {
-    let d = wrap(p - pos);
-	// distance to light
-	let ld = length(d);
-	
-	// shadow and falloff
-    let lightDir = d / max(radius, ld);
-	return traceShadow(p_screen, p, pos, lightDir, ld, radius);
+fn traceTerrain(ro: vec2<f32>, rd: vec2<f32>, tmax: f32) -> f32 {
+    var t: f32 = 0.;
+    for(var i: i32 = 0; i < 32; i = i + 1) {
+        let h = max(sceneDist(ro + t * rd), 0.);
+        t = t + h;
+        if( h < .001) {
+            return t;
+        }            
+        if(t > tmax) {
+            return tmax;
+        }
+    }
+    return t;
 }
 
 let kMaxRayDistance: f32 = 100000000.0;
@@ -481,6 +487,36 @@ fn traceRay(ro: vec3<f32>, rd: vec3<f32>, tmax: f32) -> RayTraceResult {
         shapeIndex,
     );
 }
+
+fn traceOcc(ro: vec3<f32>, rd: vec3<f32>, tmax: f32) -> f32 {
+    for (var i = 0u; i < shapesConfig.numShapes; i = i + 1u) {
+        let s = shapesBuffer.shapes[i];
+        let oro = ro - s.data1.xyz;
+        let t = iSphere(oro, rd, s.data1.w);
+        if (t > 0. && t < tmax) {
+            return 0.;
+        }
+    }
+    return 1.;
+}
+
+fn constructONBfrisvad(normal: vec3<f32>) -> mat3x3<f32> {
+    if (normal.z < -0.999805696f) {
+        return mat3x3<f32>(
+            vec3<f32>(0.0f, -1.0f, 0.0f),
+            normal,
+            vec3<f32>(-1.0f, 0.0f, 0.0f)
+        );
+    }
+    let a = 1.0f / (1.0f + normal.z);
+    let b = -normal.x * normal.y * a;
+    return mat3x3<f32>(
+        vec3<f32>(1.0f - normal.x * normal.x * a, b, -normal.x),
+        normal,
+        vec3<f32>(b, 1.0f - normal.y * normal.y * a, -normal.y)
+    );
+}
+
 
 @fragment
 fn main_frag_pbr(in: VertexOutput) -> @location(0) vec4<f32> {
@@ -562,12 +598,35 @@ fn main_frag_pbr(in: VertexOutput) -> @location(0) vec4<f32> {
         }
         let falloff = pow(clamp(1. - pow(distance/effectiveRange, 4.), 0., 1.), 2.) / ((distance * distance) + 1.);
         //let falloff = pow((effectiveRange - distance) / effectiveRange, 2.);
-        let distanceToSurface = shadow_pbr(in.position.xy, WorldPos.xy, light.position, light.radius);
-        let shadow = mix(
-            smoothstep(10., 0., distanceToSurface), 
-            step(distanceToSurface, 0.), 
-            step(0., dist)
-        );
+        var shadow = 1.;
+        if (distance > light.radius) {
+            let distanceToCenter = length(l);
+            let invDistanceToCenter = 1. / distanceToCenter;
+            let w = l * invDistanceToCenter;
+
+            let toWorld = constructONBfrisvad(w);
+            let rand = blue_noise(in.position.xy);
+            var q = light.radius * invDistanceToCenter;
+            q = sqrt(1.0 - q * q);
+            let theta = acos(1. - rand.x + rand.x * q);
+            let phi = TwoPI * rand.y;
+            let local = vec3<f32>(sin(theta) * cos(phi), cos(theta), sin(theta) * sin(phi));
+            let wp = toWorld * local;
+            let tmax = min(iSphere(-l, wp, light.radius), q * distanceToCenter);
+
+            let distanceToTerrainFromLight = traceTerrain(wrap(WorldPos.xy + tmax * wp.xy), -wp.xy, tmax);
+            shadow = mix(
+                smoothstep(10., 0., tmax - distanceToTerrainFromLight), // Inside terrain
+                step(tmax, distanceToTerrainFromLight), 
+                step(0., dist)
+            );
+            if (shadow == 0.) {
+                continue;
+            }
+            if (dist > 0.) {
+                shadow = shadow * traceOcc(WorldPos, wp, tmax);
+            }
+        }
         if (shadow == 0.) {
             continue;
         }
