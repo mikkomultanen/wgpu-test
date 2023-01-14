@@ -1,39 +1,39 @@
 //----------------------------------------------------------------------------------------
 //  1 out, 1 in...
-fn hash11(v: f32) -> f32
-{
-    var p: f32 = fract(v * .1031);
-    p = p * (p + 33.33);
-    p = p * (p + p);
-    return fract(p);
-}
+//fn hash11(v: f32) -> f32
+//{
+//    var p: f32 = fract(v * .1031);
+//    p = p * (p + 33.33);
+//    p = p * (p + p);
+//    return fract(p);
+//}
 
 //----------------------------------------------------------------------------------------
 //  1 out, 2 in...
-fn hash12(p: vec2<f32>) -> f32
-{
-	var p3: vec3<f32> = fract(vec3<f32>(p.xyx) * .1031);
-    p3 = p3 + dot(p3, p3.yzx + 33.33);
-    return fract((p3.x + p3.y) * p3.z);
-}
+//fn hash12(p: vec2<f32>) -> f32
+//{
+//	var p3: vec3<f32> = fract(vec3<f32>(p.xyx) * .1031);
+//    p3 = p3 + dot(p3, p3.yzx + 33.33);
+//    return fract((p3.x + p3.y) * p3.z);
+//}
 
 //----------------------------------------------------------------------------------------
 //  1 out, 3 in...
-fn hash13(p: vec3<f32>) -> f32
-{
-	var p3 = fract(p * .1031);
-    p3 = p3 + dot(p3, p3.zyx + 31.32);
-    return fract((p3.x + p3.y) * p3.z);
-}
+//fn hash13(p: vec3<f32>) -> f32
+//{
+//	var p3 = fract(p * .1031);
+//    p3 = p3 + dot(p3, p3.zyx + 31.32);
+//    return fract((p3.x + p3.y) * p3.z);
+//}
 
 //----------------------------------------------------------------------------------------
 //  2 out, 1 in...
-fn hash21(p: f32) -> vec2<f32>
-{
-	var p3: vec3<f32> = fract(vec3<f32>(p) * vec3<f32>(.1031, .1030, .0973));
-	p3 = p3 + dot(p3, p3.yzx + 33.33);
-    return fract((p3.xx+p3.yz)*p3.zy);
-}
+//fn hash21(p: f32) -> vec2<f32>
+//{
+//	var p3: vec3<f32> = fract(vec3<f32>(p) * vec3<f32>(.1031, .1030, .0973));
+//	p3 = p3 + dot(p3, p3.yzx + 33.33);
+//    return fract((p3.xx+p3.yz)*p3.zy);
+//}
 
 //----------------------------------------------------------------------------------------
 ///  2 out, 2 in...
@@ -211,47 +211,46 @@ fn sceneDist(world_pos: vec2<f32>) -> f32 {
     return unpackSdf(textureSample(t_sdf, s_sdf, uv).r);
 }
 
-fn hardShadow(p: vec2<f32>, lightDir: vec2<f32>, lightDistance: f32, radius: f32) -> f32 {
-    if (lightDistance < radius) {
+fn hardShadow(ro: vec2<f32>, rd: vec2<f32>, tmax: f32, radius: f32) -> f32 {
+    if (tmax < radius) {
         return 1.;
     }
-    var d: f32 = 0.0;
+    var t: f32 = 0.0;
     for(var i: i32 = 0; i < 32; i = i + 1) {
-        let h = sceneDist(p + d * lightDir);
+        let h = sceneDist(ro + t * rd);
         if( h < .001) {
             return 0.;
         }            
-        d = d + h;
-        if(d > lightDistance - radius) {
+        t += h;
+        if(t > tmax - radius) {
             return 1.;
         }
     }
     return 0.;
 }
 
-fn softShadow(p: vec2<f32>, lightDir: vec2<f32>, lightDistance: f32, radius: f32) -> f32 {
-    if (lightDistance <= radius) {
+fn softShadow(ro: vec2<f32>, rd: vec2<f32>, tmax: f32, radius: f32) -> f32 {
+    if (tmax <= radius) {
         return 1.;
     }
     var r: f32 = 1.0;
-    var d: f32 = 0.02;
+    var t: f32 = 0.02;
     var ph: f32 = 1.0e20;
-    let k = radius / lightDistance;
+    let k = radius / tmax;
     //let k = radius * inverseSqrt(lightDistance * lightDistance - radius * radius);
     for(var i: i32 = 0; i < 64; i = i + 1) {
-        let extra = d * k;
-        let h = sceneDist(p + d * lightDir) + extra;
+        let extra = t * k;
+        let h = sceneDist(ro + t * rd) + extra;
         if( h < .001) {
             return 0.;
         }
-        if(d + h - extra > lightDistance - radius) {
+        if(t + h - extra > tmax - radius) {
             return r;
         }
         let y = h*h/(2.0*ph);
-        let t = sqrt(h*h-y*y);
-        r = min(r, t/max(0.0,(d - y)*(k + k)));
+        r = min(r, sqrt(h*h-y*y)/max(0.0,(t - y)*(k + k)));
         ph = h;
-        d = d + .5 * h;
+        t += .5 * h;
     }
     return 0.;
 }
@@ -265,29 +264,6 @@ fn wrap(p: vec2<f32>) -> vec2<f32>
 fn wrap3(p: vec3<f32>) -> vec3<f32>
 {
     return vec3<f32>(wrap(p.xy), p.z);
-}
-
-fn drawLight(p: vec2<f32>, pos: vec2<f32>, color: vec3<f32>, dist: f32, range: f32, radius: f32, pChange: f32) -> vec3<f32>
-{
-    if (dist < 0.) {
-        return vec3<f32>(0., 0., 0.);
-    }
-
-    let d = wrap(pos - p);
-	// distance to light
-	let ld = length(d);
-	
-	// out of range
-	if (ld > range) {
-        return vec3<f32>(0., 0., 0.);
-    }
-	
-	// shadow and falloff
-	let shad = softShadow(p, d / max(radius, ld), ld, radius);
-	var fall = (range - ld + radius) / range;
-	fall = fall * fall;
-	let source = 1.0 - clamp((ld - radius) / pChange + 0.5, 0.0, 1.0);
-    return mix(shad * fall, 4., source) * color;
 }
 
 fn rotation(angle: f32) -> mat2x2<f32> {
@@ -304,89 +280,6 @@ fn blue_noise(p: vec2<f32>) -> vec4<f32> {
     let dimensions = textureDimensions(t_blue_noise);
     let coords = vec2<i32>(p) % dimensions;
     return textureLoad(t_blue_noise, coords, 0);
-}
-
-fn traceShadow(p_screen: vec2<f32>, p: vec2<f32>, pos: vec2<f32>, lightDir: vec2<f32>, lightDistance: f32, radius: f32) -> f32 {
-    if (lightDistance <= radius) {
-        return 0.;
-    }
-    let r2 = radius * radius;
-    let a = r2 / lightDistance;
-    let rand = 2. * blue_noise(p_screen).r - 1.;
-    let b = sqrt(r2 - a * a) * rand * 0.9999;
-
-    let ab = a * lightDir + b * perpendicular(lightDir);
-    let ab_d = wrap(p - pos - ab);
-
-    let xa = dot(ab_d, ab_d);
-    let xb = 2. * dot(ab, ab_d);
-    let xc = dot(ab, ab) - r2;
-    let x = (-xb + sqrt(xb * xb - 4. * xa * xc)) / (2. * xa);
-
-    let lp = pos + ab + x * ab_d;
-
-    var d: f32 = 0.;
-    let ld = wrap(p - lp);
-    let lld = length(ld);
-    let rayDir = ld / lld;
-    for(var i: i32 = 0; i < 32; i = i + 1) {
-        let h = max(sceneDist(lp + d * rayDir), 0.);
-        if( h < .001) {
-            return lld - d - h;
-        }            
-        d = d + h;
-        if(d > lld) {
-            return lld - d;
-        }
-    }
-    return lld - d;
-}
-
-fn traceLight(p_screen: vec2<f32>, p: vec2<f32>, pos: vec2<f32>, color: vec3<f32>, dist: f32, range: f32, radius: f32, pChange: f32) -> vec3<f32>
-{
-    if (dist < 0.) {
-        return vec3<f32>(0., 0., 0.);
-    }
-
-    let d = wrap(p - pos);
-	// distance to light
-	let ld = length(d);
-	
-	// out of range
-	if (ld > range) {
-        return vec3<f32>(0., 0., 0.);
-    }
-	
-	// shadow and falloff
-    let lightDir = d / max(radius, ld);
-	let shad = step(traceShadow(p_screen, p, pos, lightDir, ld, radius), 0.);
-	var fall = (range - ld + radius) / range;
-	fall = fall * fall;
-	let source = 1.0 - clamp((ld - radius) / pChange + 0.5, 0.0, 1.0);
-    return mix(shad * fall, 4., source) * color;
-}
-
-@fragment
-fn main_frag(in: VertexOutput) -> @location(0) vec4<f32> {
-    let worldPosChange = fwidth(in.world_pos.x);
-
-    let dist = sceneDist(in.world_pos);
-
-    var col = vec3<f32>(0., 0., 0.);
-    for (var i = 0u; i < lightsConfig.numLights; i = i + 1u) {
-        let light = lightsBuffer.lights[i];
-        col = col + traceLight(in.position.xy, in.world_pos, light.position, light.color.rgb, dist, light.range, light.radius, worldPosChange);
-    }
-
-    let InsideColor = vec3<f32>(1.0, 0.4, 0.0);
-    let OutsideColor = vec3<f32>(0.5, 0.5, 0.5);
-    if (dist < 0.) {
-        col = col * InsideColor;
-    } else {
-        col = col * OutsideColor;
-    }
-
-    return vec4<f32>(col, 1.);
 }
 
 let PI: f32 = 3.14159265359;
@@ -439,7 +332,7 @@ fn traceTerrain(ro: vec2<f32>, rd: vec2<f32>, tmax: f32) -> f32 {
     var t: f32 = 0.;
     for(var i: i32 = 0; i < 32; i = i + 1) {
         let h = max(sceneDist(ro + t * rd), 0.);
-        t = t + h;
+        t += h;
         if( h < .001) {
             return t;
         }            
@@ -528,16 +421,6 @@ fn main_frag_pbr(in: VertexOutput) -> @location(0) vec4<f32> {
     let offset = vec3<f32>(0.5 * uniforms.pixel_size.xy, 0.);
 
     let dist = sceneDist(in.world_pos);
-//    let distX = sceneDist(in.world_pos + offset.xz);
-//    let distY = sceneDist(in.world_pos + offset.zy);
-//    let distN = vec2<f32>((distX - dist) / offset.x, (distY - dist) / offset.y);
-//    let t = clamp(0.5 * dist + 1., 0., 1.);
-//    let N = normalize(vec3<f32>((6. * t * (1. - t)) * distN, -1.));
-//    let WorldPos = vec3<f32>(in.world_pos, 2. * smoothStep(0., 1., t));
-//    let N = normalize(vec3<f32>(((2. * t) * step(1., t) * step(t, 0.)) * distN, -1.));
-//    let WorldPos = vec3<f32>(in.world_pos, 2. * t * t);
-//    let N = mix(normalize(vec3<f32>(distN, -1.)), vec3<f32>(0., 0., -1.), step(-dist, 0.));
-//    let WorldPos = vec3<f32>(in.world_pos, 2. * step(-dist, 0.));
     let RO = vec3<f32>(in.world_pos, -1000.0);
     let RD = vec3<f32>(0., 0., 1.);
     var N = vec3<f32>(0., 0., -1.);
@@ -574,8 +457,7 @@ fn main_frag_pbr(in: VertexOutput) -> @location(0) vec4<f32> {
 
     let ao = 1.0;
 
-    var F0 = vec3<f32>(.04, .04, .04); 
-    F0 = mix(F0, albedo, metallic);
+    let F0 = mix(vec3<f32>(.04, .04, .04), albedo, metallic);
 	           
     // reflectance equation
     var Lo = vec3<f32>(0., 0., 0.);
@@ -602,7 +484,6 @@ fn main_frag_pbr(in: VertexOutput) -> @location(0) vec4<f32> {
             continue;
         }
         let falloff = pow(clamp(1. - pow(distance/effectiveRange, 4.), 0., 1.), 2.) / ((distance * distance) + 1.);
-        //let falloff = pow((effectiveRange - distance) / effectiveRange, 2.);
         var shadow = 1.;
         if (distance > light.radius) {
             let distanceToCenter = length(l);
@@ -615,8 +496,7 @@ fn main_frag_pbr(in: VertexOutput) -> @location(0) vec4<f32> {
             q = sqrt(1.0 - q * q);
             let theta = acos(1. - rand.x + rand.x * q);
             let phi = TwoPI * rand.y;
-            let local = vec3<f32>(sin(theta) * cos(phi), cos(theta), sin(theta) * sin(phi));
-            let wp = toWorld * local;
+            let wp = toWorld * vec3<f32>(sin(theta) * cos(phi), cos(theta), sin(theta) * sin(phi));
             let tmax = min(iSphere(-l, wp, light.radius), q * distanceToCenter);
 
             let distanceToTerrainFromLight = traceTerrain(wrap(WorldPos.xy + tmax * wp.xy), -wp.xy, tmax);
@@ -637,8 +517,6 @@ fn main_frag_pbr(in: VertexOutput) -> @location(0) vec4<f32> {
         }
         let radiance = light.color.rgb * shadow * falloff;
 
-        //let attenuation = 1.0 / (distance * distance);
-        //let radiance     = light.color.rgb * attenuation;        
         let H = normalize(-RD + L);
         
         // cook-torrance brdf
@@ -662,54 +540,4 @@ fn main_frag_pbr(in: VertexOutput) -> @location(0) vec4<f32> {
     color = color * albedo;
 	
     return vec4<f32>(color, 1.0);
-}
-
-fn lightDist(p: vec2<f32>) -> f32 {
-    let q = wrap(uniforms.mouse - p);
-    return length(q) - 10.;
-}
-
-fn trace(p: vec2<f32>, dir: vec2<f32>, worldPosChange: f32) -> vec4<f32>
-{
-    var dl = 0.02;
-    var d: vec2<f32> = p + dl * dir;
-    let range = 500.0;
-    for(var i: i32 = 0; i < 32; i = i + 1) {
-        let l = lightDist(d) + 1.;
-        if( l - 1. < worldPosChange) {
-            let fall = (range - dl - l + 10.0) / range;
-            return vec4<f32>(0.75, 1.0, 0.5, 1.0) * fall;
-        }
-        let h = sceneDist(d);
-        if( h < worldPosChange) {
-            return vec4<f32>(0., 0., 0., 1.);
-        }
-        let m = min(h, l);
-        dl = dl + m;
-        if(dl > range) {
-            return vec4<f32>(0., 0., 0., 1.);
-        }
-        d = d +  m * dir;
-    }
-    return vec4<f32>(0., 0., 0., 1.);
-}
-
-@fragment
-fn main_frag_gi(in: VertexOutput) -> @location(0) vec4<f32> {
-    let worldPosChange = fwidth(in.world_pos.x);
-
-    var light = vec4<f32>(0., 0., 0., 1.);
-    let rand = blue_noise(in.position.xy);
-    var t = (0. + rand.r) / 4. * 2. * 3.1415;
-    light = light + trace(in.world_pos, vec2<f32>(cos(t), sin(t)), worldPosChange);
-    t = (1. + rand.g) / 4. * 2. * 3.1415;
-    light = light + trace(in.world_pos, vec2<f32>(cos(t), sin(t)), worldPosChange);
-    t = (2. + rand.b) / 4. * 2. * 3.1415;
-    light = light + trace(in.world_pos, vec2<f32>(cos(t), sin(t)), worldPosChange);
-    t = (3. + rand.a) / 4. * 2. * 3.1415;
-    light = light + trace(in.world_pos, vec2<f32>(cos(t), sin(t)), worldPosChange);
-    light = 4. * light / 4.;
-    light.a = 1.0;
-
-    return light;
 }
