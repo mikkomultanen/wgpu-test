@@ -262,6 +262,11 @@ fn wrap(p: vec2<f32>) -> vec2<f32>
     return (p + s * uniforms.world_size) % uniforms.world_size - 0.5 * uniforms.world_size;
 }
 
+fn wrap3(p: vec3<f32>) -> vec3<f32>
+{
+    return vec3<f32>(wrap(p.xy), p.z);
+}
+
 fn drawLight(p: vec2<f32>, pos: vec2<f32>, color: vec3<f32>, dist: f32, range: f32, radius: f32, pChange: f32) -> vec3<f32>
 {
     if (dist < 0.) {
@@ -473,7 +478,7 @@ fn traceRay(ro: vec3<f32>, rd: vec3<f32>, tmax: f32) -> RayTraceResult {
     var shapeIndex = shapesConfig.numShapes;
     for (var i = 0u; i < shapesConfig.numShapes; i = i + 1u) {
         let s = shapesBuffer.shapes[i];
-        let oro = ro - s.data1.xyz;
+        let oro = wrap3(ro - s.data1.xyz);
         let t = iSphere(oro, rd, s.data1.w);
         if (t < tmin) {
             tmin = t;
@@ -491,7 +496,7 @@ fn traceRay(ro: vec3<f32>, rd: vec3<f32>, tmax: f32) -> RayTraceResult {
 fn traceOcc(ro: vec3<f32>, rd: vec3<f32>, tmax: f32) -> f32 {
     for (var i = 0u; i < shapesConfig.numShapes; i = i + 1u) {
         let s = shapesBuffer.shapes[i];
-        let oro = ro - s.data1.xyz;
+        let oro = wrap3(ro - s.data1.xyz);
         let t = iSphere(oro, rd, s.data1.w);
         if (t > 0. && t < tmax) {
             return 0.;
