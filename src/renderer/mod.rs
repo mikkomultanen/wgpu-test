@@ -583,7 +583,10 @@ impl Renderer {
         self.uniforms.translate = [self.position.x, self.position.y];
         self.uniforms.view_size = [self.view_size.x, self.view_size.y];
         self.uniforms.pixel_size = [self.view_size.x / self.render_resolution.x as f32, self.view_size.y / self.render_resolution.y as f32];
-        self.uniforms.sub_pixel_jitter = self.subpixel_jitter_samples[self.subpixel_jitter_index];
+        self.uniforms.sub_pixel_jitter = match self.upsampler.upsampler() {
+            Upsampler::TAA => self.subpixel_jitter_samples[self.subpixel_jitter_index],
+            Upsampler::BLIT => [0., 0.],
+        };
         self.uniforms.mouse = [mouse.x, mouse.y];
         self.uniforms.cursor_size = cursor_size;
         self.uniforms.time = self.start_time.elapsed().as_secs_f32();
