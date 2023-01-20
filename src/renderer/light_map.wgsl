@@ -183,6 +183,7 @@ var<uniform> lightsConfig: LightsConfig;
 struct ShapeData {
     data0: vec4<u32>,
     data1: vec4<f32>,
+    data2: vec4<f32>,
 };
 
 struct ShapesBuffer {
@@ -359,6 +360,63 @@ fn nSphere(pos: vec3<f32>) -> vec3<f32> {
     return normalize(pos);
 }
 
+// https://www.shadertoy.com/view/MlKfzm
+fn iRoundedCone(ro: vec3<f32>, rd: vec3<f32>, 
+                  pa: vec3<f32>, pb: vec3<f32>,
+                  ra: f32, rb: f32) -> vec4<f32> {
+    let ba = pb - pa;
+	let oa = ro - pa;
+	let ob = ro - pb;
+    let rr = ra - rb;
+    let m0 = dot(ba,ba);
+    let m1 = dot(ba,oa);
+    let m2 = dot(ba,rd);
+    let m3 = dot(rd,oa);
+    let m5 = dot(oa,oa);
+	let m6 = dot(ob,rd);
+    let m7 = dot(ob,ob);
+    
+    let d2 = m0-rr*rr;
+    
+	let k2 = d2    - m2*m2;
+    let k1 = d2*m3 - m1*m2 + m2*rr*ra;
+    let k0 = d2*m5 - m1*m1 + m1*rr*ra*2.0 - m0*ra*ra;
+    
+	let h = k1*k1 - k0*k2;
+	if(h < 0.0) {
+        return vec4<f32>(kMaxRayDistance);
+    }
+    var t = (-sqrt(h)-k1)/k2;
+
+    let y = m1 - ra*rr + t*m2;
+    if( y>0.0 && y<d2 ) 
+    {
+        return vec4<f32>(t, normalize( d2*(oa + t*rd)-ba*y) );
+    }
+
+    let h1 = m3*m3 - m5 + ra*ra;
+    let h2 = m6*m6 - m7 + rb*rb;
+    if( max(h1,h2)<0.0 ) {
+        return vec4<f32>(kMaxRayDistance);
+    }
+    
+    var r = vec4<f32>(kMaxRayDistance);
+    if( h1>0.0 )
+    {        
+    	t = -m3 - sqrt( h1 );
+        r = vec4<f32>( t, (oa+t*rd)/ra );
+    }
+	if( h2>0.0 )
+    {
+    	t = -m6 - sqrt( h2 );
+        if( t<r.x ) {
+            r = vec4<f32>( t, (ob+t*rd)/rb );
+        }        
+    }
+    
+    return r;
+}
+
 struct RayTraceResult {
     t: f32,
     normal: vec3<f32>,
@@ -371,12 +429,22 @@ fn traceRay(ro: vec3<f32>, rd: vec3<f32>, tmax: f32) -> RayTraceResult {
     var shapeIndex = shapesConfig.numShapes;
     for (var i = 0u; i < shapesConfig.numShapes; i = i + 1u) {
         let s = shapesBuffer.shapes[i];
-        let oro = wrap3(ro - s.data1.xyz);
-        let t = iSphere(oro, rd, s.data1.w);
-        if (t < tmin) {
-            tmin = t;
-            normal = nSphere(oro + t * rd);
-            shapeIndex = i;
+        if (s.data0[0] == 0u) {
+            let oro = wrap3(ro - s.data1.xyz);
+            let t = iSphere(oro, rd, s.data1.w);
+            if (t < tmin) {
+                tmin = t;
+                normal = nSphere(oro + t * rd);
+                shapeIndex = i;
+            }
+        } else if (s.data0[0] == 1u) {
+            let oro = wrap3(ro - s.data1.xyz);
+            let tnor = iRoundedCone(oro, rd, vec3<f32>(0.), s.data2.xyz- s.data1.xyz, s.data1.w, s.data2.w);
+            if (tnor.x < tmin) {
+                tmin = tnor.x;
+                normal = tnor.yzw;
+                shapeIndex = i;
+            }
         }
     }
     return RayTraceResult(
@@ -389,10 +457,18 @@ fn traceRay(ro: vec3<f32>, rd: vec3<f32>, tmax: f32) -> RayTraceResult {
 fn traceOcc(ro: vec3<f32>, rd: vec3<f32>, tmax: f32) -> f32 {
     for (var i = 0u; i < shapesConfig.numShapes; i = i + 1u) {
         let s = shapesBuffer.shapes[i];
-        let oro = wrap3(ro - s.data1.xyz);
-        let t = iSphere(oro, rd, s.data1.w);
-        if (t > 0. && t < tmax) {
-            return 0.;
+        if (s.data0[0] == 0u) {
+            let oro = wrap3(ro - s.data1.xyz);
+            let t = iSphere(oro, rd, s.data1.w);
+            if (t > 0. && t < tmax) {
+                return 0.;
+            }
+        } else if (s.data0[0] == 1u) {
+            let oro = wrap3(ro - s.data1.xyz);
+            let t = iRoundedCone(oro, rd, vec3<f32>(0.), s.data2.xyz- s.data1.xyz, s.data1.w, s.data2.w).x;
+            if (t > 0. && t < tmax) {
+                return 0.;
+            }
         }
     }
     return 1.;

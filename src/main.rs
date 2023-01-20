@@ -40,6 +40,7 @@ struct State {
     zoom_out_pressed: bool,
     add_light_pressed: bool,
     add_shape_pressed: bool,
+    add_entity_pressed: bool,
 }
 
 impl State {
@@ -76,7 +77,7 @@ impl State {
         let mut lights = Vec::new();
         lights.push(LightData::new([1., 1., 1.], [0., 0.], 10., 10. / 40. * 0.5 * WORLD_SIZE.x));
         let mut shapes = Vec::new();
-        shapes.push(ShapeData::sphere());
+        shapes.push(ShapeData::new());
 
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -127,6 +128,7 @@ impl State {
             zoom_out_pressed: false,
             add_light_pressed: false,
             add_shape_pressed: false,
+            add_entity_pressed: false,
         }
     }
 
@@ -187,6 +189,7 @@ impl State {
                     Some(VirtualKeyCode::X) => { self.zoom_out_pressed = pressed; true },
                     Some(VirtualKeyCode::L) => { self.add_light_pressed = pressed; true },
                     Some(VirtualKeyCode::O) => { self.add_shape_pressed = pressed; true },
+                    Some(VirtualKeyCode::E) => { self.add_entity_pressed = pressed; true },
                     _ => false,
                 }
             }
@@ -220,6 +223,26 @@ impl State {
             self.add_shape_pressed = false;
             if self.shapes.len() < renderer::MAX_SHAPES {
                 self.shapes.push(self.shapes[0].clone());
+                self.gui.update_shapes(self.shapes.len());
+            }
+        }
+
+        if self.add_entity_pressed {
+            self.add_entity_pressed = false;
+            if self.shapes.len() + 11 <= renderer::MAX_SHAPES {
+                let mut parts: Vec<ShapeData> = vec![ShapeData::new(); 11];
+                parts[0].update_rounded_cone([0.,0.35,0.].into(), 0.35, [0.,0.6,0.].into(), 0.25, [1., 0.5, 0.], 0., 0.8,);
+                parts[1].update_rounded_cone([0.,0.6,0.].into(), 0.15, [0.32,0.6,0.].into(), 0.075, [0.8, 0.8, 0.8], 0., 0.8,);
+                parts[2].update_sphere([0.36,0.66, 0.].into(), 0.03, [0., 0., 0.], 0., 0.2,);
+                parts[3].update_sphere([0.19,0.7, 0.1].into(), 0.03, [0., 0., 0.], 0., 0.2,);
+                parts[4].update_sphere([0.19,0.7, -0.1].into(), 0.03, [0., 0., 0.], 0., 0.2,);
+                parts[5].update_rounded_cone([0.,0.4,-0.15].into(), 0.2, [0.,0.45,-0.45].into(), 0.08, [1., 0.5, 0.], 0., 0.8,);
+                parts[6].update_rounded_cone([0.,0.4,0.15].into(), 0.2, [0.,0.45,0.45].into(), 0.08, [1., 0.5, 0.], 0., 0.8,);
+                parts[7].update_sphere([0.07,0.33, 0.].into(), 0.3, [0.8, 0.8, 0.8], 0., 0.2,);
+                parts[8].update_rounded_cone([0.,0.35,0.].into(), 0.2, [-0.3,0.1,0.].into(), 0.05, [1., 0.5, 0.], 0., 0.8,);
+                parts[9].update_rounded_cone([-0.05,0.05,-0.15].into(), 0.1, [0.2,0.01,-0.2].into(), 0.1, [1., 0.5, 0.], 0., 0.8,);
+                parts[10].update_rounded_cone([-0.05,0.05,0.15].into(), 0.1, [0.2,0.01,0.2].into(), 0.1, [1., 0.5, 0.], 0., 0.8, );
+                self.shapes.append(&mut parts);
                 self.gui.update_shapes(self.shapes.len());
             }
         }
@@ -262,11 +285,11 @@ impl State {
             (self.gui.light_range * 0.5 * WORLD_SIZE.x.min(WORLD_SIZE.y)).max(self.gui.light_radius),
         );
         self.shapes[0].update_sphere(
+            mouse_world_pos.to_vec().extend(2. - self.gui.shape_radius),
+            self.gui.shape_radius,
             self.gui.shape_color,
             self.gui.shape_metallic,
             self.gui.shape_roughness,
-            mouse_world_pos.to_vec().extend(20. - self.gui.shape_radius),
-            self.gui.shape_radius,
         );
 
         if self.add_pressed {
