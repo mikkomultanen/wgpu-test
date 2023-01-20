@@ -60,17 +60,17 @@ impl GUI {
             platform,
             rpass,
             start_time: Instant::now(),
-            cursor_size: 10.0,
+            cursor_size: 1.0,
             light_hue: 0.0,
             light_saturation: 0.0,
-            light_intensity: 1000.0,
-            light_radius: 5.0,
+            light_intensity: 100.0,
+            light_radius: 0.1,
             light_range: 1.0,
             exposure: 1.0,
-            shape_color: [0.5, 0.5, 0.5],
+            shape_color: [0.5, 1.0, 0.5],
             shape_metallic: 0.,
-            shape_roughness: 0.5,
-            shape_radius: 5.0,
+            shape_roughness: 0.1,
+            shape_radius: 0.5,
             upsampler: renderer::Upsampler::BLIT,
             renderer_scale: 1.0 / (scale_factor as f32), 
             v_sync: true,
@@ -134,17 +134,17 @@ impl GUI {
             egui::Window::new("Tools")
             .resizable(false)
             .show(&ctx, |ui| {
-                ui.add(egui::Slider::new(&mut self.cursor_size, 5.0..=40.0).text("cursor size"));
+                ui.add(egui::Slider::new(&mut self.cursor_size, 1.0..=10.0).text("cursor size"));
                 ui.add(egui::Slider::new(&mut self.light_hue, 0.0..=1.0).text("light hue"));
                 ui.add(egui::Slider::new(&mut self.light_saturation, 0.0..=1.0).text("light saturation"));
-                ui.add(egui::Slider::new(&mut self.light_intensity, 0.0..=10000.0).text("light intensity"));
-                ui.add(egui::Slider::new(&mut self.light_radius, 0.0..=40.0).text("light radius"));
+                ui.add(egui::Slider::new(&mut self.light_intensity, 0.0..=1000.0).text("light intensity"));
+                ui.add(egui::Slider::new(&mut self.light_radius, 0.0..=1.0).text("light radius"));
                 ui.add(egui::Slider::new(&mut self.light_range, 0.0..=1.0).text("light range"));
                 ui.add(egui::Slider::new(&mut self.exposure, 0.0..=100.0).text("exposure"));
                 egui::widgets::color_picker::color_edit_button_rgb(ui, &mut self.shape_color);
                 ui.add(egui::Slider::new(&mut self.shape_metallic, 0.0..=1.0).text("shape metallic"));
                 ui.add(egui::Slider::new(&mut self.shape_roughness, 0.0..=1.0).text("shape roughness"));
-                ui.add(egui::Slider::new(&mut self.shape_radius, 0.0..=10.0).text("shape radius"));
+                ui.add(egui::Slider::new(&mut self.shape_radius, 0.0..=1.0).text("shape radius"));
                 egui::ComboBox::from_label("upsampler")
                 .selected_text(format!("{:?}", self.upsampler))
                 .show_ui(ui, |ui| {

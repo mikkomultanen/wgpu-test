@@ -136,7 +136,7 @@ const COLOR_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Flo
 
 impl Renderer {
     pub fn new(render_resolution: Vector2<u32>, output_resolution: Vector2<u32>, world_size: Vector2<f32>, device: &wgpu::Device, queue: &mut wgpu::Queue, sdf: &SDF, surface_format: &wgpu::TextureFormat) -> Self {
-        let mut view_size = Vector2::new(world_size.x, world_size.y);
+        let mut view_size = Vector2::new(world_size.x / 4., world_size.y / 4.);
         view_size.x = view_size.y * output_resolution.x as f32 / output_resolution.y as f32;
 
         let mut uniforms = Uniforms::default();

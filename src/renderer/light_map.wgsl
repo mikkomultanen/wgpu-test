@@ -343,7 +343,7 @@ fn traceTerrain(ro: vec2<f32>, rd: vec2<f32>, tmax: f32) -> f32 {
     return t;
 }
 
-let kMaxRayDistance: f32 = 100000000.0;
+let kMaxRayDistance: f32 = 1e20;
 
 fn iSphere(ro: vec3<f32>, rd: vec3<f32>, radius: f32) -> f32 {
     let b = dot(rd, ro);
@@ -421,10 +421,10 @@ fn main_frag_pbr(in: VertexOutput) -> @location(0) vec4<f32> {
     let offset = vec3<f32>(0.5 * uniforms.pixel_size.xy, 0.);
 
     let dist = sceneDist(in.world_pos);
-    let RO = vec3<f32>(in.world_pos, -1000.0);
+    let RO = vec3<f32>(in.world_pos, -2.0);
     let RD = vec3<f32>(0., 0., 1.);
     var N = vec3<f32>(0., 0., -1.);
-    var WorldPos = vec3<f32>(in.world_pos, 20.);
+    var WorldPos = vec3<f32>(in.world_pos, 2.);
 
     var albedo: vec3<f32>;
     var metallic: f32;
@@ -439,7 +439,7 @@ fn main_frag_pbr(in: VertexOutput) -> @location(0) vec4<f32> {
         metallic = 1.;
         roughness = 0.5;
     }
-    let patternMask = clamp(dot(floor((abs(in.world_pos) + 2.0) / 4.0), vec2<f32>(1.0)) % 2.0, 0.8, 1.0);
+    let patternMask = clamp(dot(floor((abs(in.world_pos) + .5) / 1.0), vec2<f32>(1.0)) % 2.0, 0.8, 1.0);
     albedo = albedo * patternMask;
 
     if (dist > 0.) {
