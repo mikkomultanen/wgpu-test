@@ -231,21 +231,29 @@ impl State {
             self.add_entity_pressed = false;
             if self.shapes.len() + 11 <= renderer::MAX_SHAPES {
                 let mut parts: Vec<ShapeData> = vec![ShapeData::new(); 11];
-                parts[0].update_rounded_cone([0.,0.35,0.].into(), 0.35, [0.,0.6,0.].into(), 0.25, [1., 0.5, 0.], 0., 0.8,);
-                parts[1].update_rounded_cone([0.,0.6,0.].into(), 0.15, [0.32,0.6,0.].into(), 0.075, [0.8, 0.8, 0.8], 0., 0.8,);
-                parts[2].update_sphere([0.36,0.66, 0.].into(), 0.03, [0., 0., 0.], 0., 0.2,);
-                parts[3].update_sphere([0.19,0.7, 0.1].into(), 0.03, [0., 0., 0.], 0., 0.2,);
-                parts[4].update_sphere([0.19,0.7, -0.1].into(), 0.03, [0., 0., 0.], 0., 0.2,);
-                parts[5].update_rounded_cone([0.,0.4,-0.15].into(), 0.2, [0.,0.45,-0.45].into(), 0.08, [1., 0.5, 0.], 0., 0.8,);
-                parts[6].update_rounded_cone([0.,0.4,0.15].into(), 0.2, [0.,0.45,0.45].into(), 0.08, [1., 0.5, 0.], 0., 0.8,);
-                parts[7].update_sphere([0.07,0.33, 0.].into(), 0.3, [0.8, 0.8, 0.8], 0., 0.2,);
-                parts[8].update_rounded_cone([0.,0.35,0.].into(), 0.2, [-0.3,0.1,0.].into(), 0.05, [1., 0.5, 0.], 0., 0.8,);
-                parts[9].update_rounded_cone([-0.05,0.05,-0.15].into(), 0.1, [0.2,0.01,-0.2].into(), 0.1, [1., 0.5, 0.], 0., 0.8,);
-                parts[10].update_rounded_cone([-0.05,0.05,0.15].into(), 0.1, [0.2,0.01,0.2].into(), 0.1, [1., 0.5, 0.], 0., 0.8, );
+                parts[0].update_rounded_cone([0., 0., 0.35].into(), 0.35, [0., 0., 0.6].into(), 0.25, [1., 0.5, 0.], 0., 0.8,);
+                parts[1].update_rounded_cone([0., 0., 0.6].into(), 0.15, [0.32, 0., 0.6].into(), 0.075, [0.8, 0.8, 0.8], 0., 0.8,);
+                parts[2].update_sphere([0.36, 0., 0.66].into(), 0.03, [0., 0., 0.], 0., 0.2,);
+                parts[3].update_sphere([0.19, 0.1, 0.7].into(), 0.03, [0., 0., 0.], 0., 0.2,);
+                parts[4].update_sphere([0.19, -0.1, 0.7].into(), 0.03, [0., 0., 0.], 0., 0.2,);
+                parts[5].update_rounded_cone([0., -0.15, 0.4].into(), 0.2, [0., -0.45, 0.45].into(), 0.08, [1., 0.5, 0.], 0., 0.8,);
+                parts[6].update_rounded_cone([0., 0.15, 0.4].into(), 0.2, [0., 0.45, 0.45].into(), 0.08, [1., 0.5, 0.], 0., 0.8,);
+                parts[7].update_sphere([0.07, 0., 0.33].into(), 0.3, [0.8, 0.8, 0.8], 0., 0.2,);
+                parts[8].update_rounded_cone([0., 0., 0.35].into(), 0.2, [-0.3, 0., 0.1].into(), 0.05, [1., 0.5, 0.], 0., 0.8,);
+                parts[9].update_rounded_cone([-0.05, -0.15, 0.05].into(), 0.1, [0.2, -0.2, 0.01].into(), 0.1, [1., 0.5, 0.], 0., 0.8,);
+                parts[10].update_rounded_cone([-0.05, 0.15, 0.05].into(), 0.1, [0.2, 0.2, 0.01].into(), 0.1, [1., 0.5, 0.], 0., 0.8, );
+                let position = self.mouse_world_pos().to_vec().extend(-2.);
+                for part in parts.iter_mut() {
+                    part.translate(position);
+                }
                 self.shapes.append(&mut parts);
                 self.gui.update_shapes(self.shapes.len());
             }
         }
+    }
+
+    fn mouse_world_pos(&self) -> Point2<f32> {
+        wrap(self.renderer.position + self.mouse_pos.to_vec().mul_element_wise(self.renderer.view_size))
     }
 
     fn render(&mut self) -> Result<(), String> {
@@ -276,16 +284,16 @@ impl State {
             label: Some("Render Encoder"),
         });
 
-        let mouse_world_pos = wrap(self.renderer.position + self.mouse_pos.to_vec().mul_element_wise(self.renderer.view_size));
+        let mouse_world_pos = self.mouse_world_pos();
         let cursor_size = self.gui.cursor_size;
         self.lights[0].update(
             self.gui.light_color(), 
-            [mouse_world_pos.x, mouse_world_pos.y],
+            mouse_world_pos.into(),
             self.gui.light_radius,
             (self.gui.light_range * 0.5 * WORLD_SIZE.x.min(WORLD_SIZE.y)).max(self.gui.light_radius),
         );
         self.shapes[0].update_sphere(
-            mouse_world_pos.to_vec().extend(2. - self.gui.shape_radius),
+            Point3::from_vec(mouse_world_pos.to_vec().extend(-2. + self.gui.shape_radius)),
             self.gui.shape_radius,
             self.gui.shape_color,
             self.gui.shape_metallic,

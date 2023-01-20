@@ -425,7 +425,7 @@ struct RayTraceResult {
 
 fn traceRay(ro: vec3<f32>, rd: vec3<f32>, tmax: f32) -> RayTraceResult {
     var tmin = tmax;
-    var normal = vec3<f32>(.0, .0, -1.0);
+    var normal = vec3<f32>(.0, .0, .0);
     var shapeIndex = shapesConfig.numShapes;
     for (var i = 0u; i < shapesConfig.numShapes; i = i + 1u) {
         let s = shapesBuffer.shapes[i];
@@ -497,10 +497,10 @@ fn main_frag_pbr(in: VertexOutput) -> @location(0) vec4<f32> {
     let offset = vec3<f32>(0.5 * uniforms.pixel_size.xy, 0.);
 
     let dist = sceneDist(in.world_pos);
-    let RO = vec3<f32>(in.world_pos, -2.0);
-    let RD = vec3<f32>(0., 0., 1.);
-    var N = vec3<f32>(0., 0., -1.);
-    var WorldPos = vec3<f32>(in.world_pos, 2.);
+    let RO = vec3<f32>(in.world_pos, 2.0);
+    let RD = vec3<f32>(0., 0., -1.);
+    var N = vec3<f32>(0., 0., 1.);
+    var WorldPos = vec3<f32>(in.world_pos, -2.);
 
     var albedo: vec3<f32>;
     var metallic: f32;
@@ -519,7 +519,7 @@ fn main_frag_pbr(in: VertexOutput) -> @location(0) vec4<f32> {
     albedo = albedo * patternMask;
 
     if (dist > 0.) {
-        let result = traceRay(RO, RD, WorldPos.z - RO.z);
+        let result = traceRay(RO, RD, RO.z - WorldPos.z);
         if (result.shapeIndex < shapesConfig.numShapes) {
             N = result.normal;
             WorldPos = RO + result.t * RD;

@@ -1,3 +1,5 @@
+use cgmath::{Vector3, Point3, EuclideanSpace};
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Zeroable, bytemuck::Pod)]
 pub struct ShapeData {
@@ -32,7 +34,19 @@ impl RgbExt for [f32; 3] {
         /*let rgbe8pixel = image::codecs::hdr::to_rgbe8((*self).into());
         u32::from_le_bytes([rgbe8pixel.c[0], rgbe8pixel.c[1], rgbe8pixel.c[2], rgbe8pixel.e])*/
     }
-} 
+}
+
+trait TranslateXYZ {
+    fn translate(&mut self, translate: [f32; 3]);
+}
+
+impl TranslateXYZ for [f32; 4] {
+    fn translate(&mut self, translate: [f32; 3]) {
+        self[0] += translate[0];
+        self[1] += translate[1];
+        self[2] += translate[2];
+    }
+}
 
 enum Shape {
     Sphere = 0,
@@ -47,25 +61,30 @@ impl ShapeData {
     }
 
     pub fn update_sphere(&mut self, 
-        position: cgmath::Vector3<f32>, radius: f32,
+        position: Point3<f32>, radius: f32,
         color: [f32; 3], metallic: f32, roughness: f32, 
     ) {
         self.data0[0] = Shape::Sphere as u32;
         self.data0[1] = color.to_u32();
         self.data0[2] = u32::from_le_bytes([egui::color::linear_u8_from_linear_f32(metallic), egui::color::linear_u8_from_linear_f32(roughness), 0u8, 0u8]);
-        self.data1 = position.extend(radius).into();
+        self.data1 = position.to_vec().extend(radius).into();
     }
 
     pub fn update_rounded_cone(&mut self, 
-        position_a: cgmath::Vector3<f32>, radius_a: f32,
-        position_b: cgmath::Vector3<f32>, radius_b: f32,
+        position_a: Point3<f32>, radius_a: f32,
+        position_b: Point3<f32>, radius_b: f32,
         color: [f32; 3], metallic: f32, roughness: f32, 
     ) {
         self.data0[0] = Shape::RoundedCone as u32;
         self.data0[1] = color.to_u32();
         self.data0[2] = u32::from_le_bytes([egui::color::linear_u8_from_linear_f32(metallic), egui::color::linear_u8_from_linear_f32(roughness), 0u8, 0u8]);
-        self.data1 = position_a.extend(radius_a).into();
-        self.data2 = position_b.extend(radius_b).into();
+        self.data1 = position_a.to_vec().extend(radius_a).into();
+        self.data2 = position_b.to_vec().extend(radius_b).into();
+    }
+
+    pub fn translate(&mut self, translate: Vector3<f32>) {
+        self.data1.translate(translate.into());
+        self.data2.translate(translate.into());
     }
 }
 
