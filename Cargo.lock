@@ -524,6 +524,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "ecolor"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b601108bca3af7650440ace4ca55b2daf52c36f2635be3587d77b16efd8d0691"
+
+[[package]]
 name = "egui"
 version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -572,9 +578,9 @@ dependencies = [
 
 [[package]]
 name = "env_logger"
-version = "0.9.0"
+version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b2cf0344971ee6c64c31be0d530793fba457d322dfec2810c453d0ef228f9c3"
+checksum = "a12e6657c4c97ebab115a42dcee77225f7f482cdd841cf7088c657a42e9e00e7"
 dependencies = [
  "atty",
  "humantime",
@@ -2026,6 +2032,7 @@ version = "0.1.0"
 dependencies = [
  "bytemuck",
  "cgmath",
+ "ecolor",
  "egui",
  "egui_wgpu_backend",
  "egui_winit_platform",

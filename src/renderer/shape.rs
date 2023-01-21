@@ -25,9 +25,9 @@ trait RgbExt {
 impl RgbExt for [f32; 3] {
     fn to_u32(&self) -> u32 {
        u32::from_le_bytes([
-            egui::color::gamma_u8_from_linear_f32(self[0]),
-            egui::color::gamma_u8_from_linear_f32(self[1]),
-            egui::color::gamma_u8_from_linear_f32(self[2]),
+            ecolor::gamma_u8_from_linear_f32(self[0]),
+            ecolor::gamma_u8_from_linear_f32(self[1]),
+            ecolor::gamma_u8_from_linear_f32(self[2]),
             0u8,
             ])
         
@@ -66,7 +66,7 @@ impl ShapeData {
     ) {
         self.data0[0] = Shape::Sphere as u32;
         self.data0[1] = color.to_u32();
-        self.data0[2] = u32::from_le_bytes([egui::color::linear_u8_from_linear_f32(metallic), egui::color::linear_u8_from_linear_f32(roughness), 0u8, 0u8]);
+        self.data0[2] = u32::from_le_bytes([ecolor::linear_u8_from_linear_f32(metallic), ecolor::linear_u8_from_linear_f32(roughness), 0u8, 0u8]);
         self.data1 = position.to_vec().extend(radius).into();
     }
 
@@ -77,7 +77,7 @@ impl ShapeData {
     ) {
         self.data0[0] = Shape::RoundedCone as u32;
         self.data0[1] = color.to_u32();
-        self.data0[2] = u32::from_le_bytes([egui::color::linear_u8_from_linear_f32(metallic), egui::color::linear_u8_from_linear_f32(roughness), 0u8, 0u8]);
+        self.data0[2] = u32::from_le_bytes([ecolor::linear_u8_from_linear_f32(metallic), ecolor::linear_u8_from_linear_f32(roughness), 0u8, 0u8]);
         self.data1 = position_a.to_vec().extend(radius_a).into();
         self.data2 = position_b.to_vec().extend(radius_b).into();
     }

@@ -9,6 +9,7 @@ resolver = "2"
 [dependencies]
 bytemuck = { version = "1.5.1", features = ["derive"] }
 cgmath = "0.18"
+ecolor = "0.20.0"
 egui = "0.19.0"
 egui_wgpu_backend = "0.20.0"
 egui_winit_platform = "0.16.0"
