@@ -12,11 +12,11 @@ use wgpu::util::DeviceExt;
 use light_map::LightMapRenderer;
 
 use crate::renderer::light::{LightData, LightsConfig};
-use crate::renderer::shape::{ShapeData, ShapesConfig};
+use crate::renderer::shape::{ShapeBVHNode, ShapeData, ShapesConfig};
 use crate::sdf::SDF;
 
 pub const MAX_LIGHTS: usize = 1024;
-pub const MAX_SHAPES: usize = 65536;
+pub const MAX_SHAPES: usize = 1024;
 const NUM_SUBPIXEL_JITTER_SAMPLES: usize = 16;
 
 fn halton(base: usize, index: usize) -> f32 {
@@ -110,6 +110,8 @@ pub struct Renderer {
     lights_config_buffer: wgpu::Buffer,
     lights_bind_group: wgpu::BindGroup,
     shapes_buffer: wgpu::Buffer,
+    bvh: Vec<ShapeBVHNode>,
+    bvh_buffer: wgpu::Buffer,
     shapes_config_buffer: wgpu::Buffer,
     shapes_bind_group: wgpu::BindGroup,
     light_map_renderer: LightMapRenderer,
@@ -235,11 +237,17 @@ impl Renderer {
         });
 
         let initial_shapes_data = vec![ShapeData::default(); MAX_SHAPES];
-        let shapes_config = ShapesConfig { num_shapes: 0, };
+        let initial_bvh_data = vec![ShapeBVHNode::default(); 4 * MAX_SHAPES];
+        let shapes_config = ShapesConfig { num_shapes: 0, num_bvh_nodes: 0, };
 
         let shapes_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
             contents: bytemuck::cast_slice(&initial_shapes_data),
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST
+        });
+        let bvh_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: None,
+            contents: bytemuck::cast_slice(&initial_bvh_data),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST
         });
 
@@ -267,6 +275,16 @@ impl Renderer {
                     visibility: wgpu::ShaderStages::FRAGMENT,
                     count: None,
                     ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    count: None,
+                    ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
                         min_binding_size: None,
@@ -284,6 +302,10 @@ impl Renderer {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
+                    resource: bvh_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
                     resource: shapes_config_buffer.as_entire_binding(),
                 },
             ],
@@ -507,6 +529,8 @@ impl Renderer {
             lights_config_buffer,
             lights_bind_group,
             shapes_buffer,
+            bvh: vec![],
+            bvh_buffer,
             shapes_config_buffer,
             shapes_bind_group,
             light_map_renderer,
@@ -598,9 +622,18 @@ impl Renderer {
         queue.write_buffer(&self.lights_config_buffer, 0, bytemuck::cast_slice(&[LightsConfig { num_lights: lights.len() as u32 }]));
     }
 
-    pub fn update_shapes(&mut self, queue: &mut wgpu::Queue, shapes: &Vec<ShapeData>) {
+    pub fn update_shapes(&mut self, queue: &mut wgpu::Queue, shapes: &mut Vec<ShapeData>) {
+        self.bvh = bvh::bvh::BVH::build(shapes).flatten_custom(&|aabb, entry, exit, shape| ShapeBVHNode {
+            aabb_pos: ((aabb.min + aabb.max) * 0.5).extend(0.).into(),
+            aabb_rad: ((aabb.max - aabb.min) * 0.5).extend(0.).into(),
+            entry,
+            exit,
+            shape,
+            padding: 0,
+        });
+        queue.write_buffer(&self.bvh_buffer, 0, bytemuck::cast_slice(&self.bvh));
         queue.write_buffer(&self.shapes_buffer, 0, bytemuck::cast_slice(shapes));
-        queue.write_buffer(&self.shapes_config_buffer, 0, bytemuck::cast_slice(&[ShapesConfig { num_shapes: shapes.len() as u32 }]));
+        queue.write_buffer(&self.shapes_config_buffer, 0, bytemuck::cast_slice(&[ShapesConfig { num_shapes: shapes.len() as u32, num_bvh_nodes: self.bvh.len() as u32 }]));
     }
 
     pub fn render(&mut self, device: &wgpu::Device, queue: &mut wgpu::Queue, encoder: &mut wgpu::CommandEncoder, sdf: &SDF, view: &wgpu::TextureView) {

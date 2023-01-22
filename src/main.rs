@@ -323,7 +323,7 @@ impl State {
             self.gui.exposure,
         );
         self.renderer.update_lights(&mut self.queue, &self.lights);
-        self.renderer.update_shapes(&mut self.queue, &self.shapes);
+        self.renderer.update_shapes(&mut self.queue, &mut self.shapes);
         self.renderer.update_upsampler(&self.device, &mut self.queue, &self.gui.upsampler);
         self.renderer.render(&mut self.device, &mut self.queue, &mut encoder, &self.sdf, &view);
         

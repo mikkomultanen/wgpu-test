@@ -192,10 +192,26 @@ struct ShapesBuffer {
 @group(3) @binding(0)
 var<storage, read> shapesBuffer: ShapesBuffer;
 
-struct ShapesConfig {
-  numShapes : u32,
+struct ShapeBVHNode {
+    aabb_pos: vec4<f32>,
+    aabb_rad: vec4<f32>,
+    entry: u32,
+    exit: u32,
+    shape: u32,
+    padding: u32,
+}
+
+struct ShapeBVHNodesBuffer {
+    nodes: array<ShapeBVHNode>,
 };
 @group(3) @binding(1)
+var<storage, read> bvhBuffer: ShapeBVHNodesBuffer;
+
+struct ShapesConfig {
+  numShapes: u32,
+  numBvhNodes: u32,
+};
+@group(3) @binding(2)
 var<uniform> shapesConfig: ShapesConfig;
 
 @group(4) @binding(0)
@@ -346,6 +362,18 @@ fn traceTerrain(ro: vec2<f32>, rd: vec2<f32>, tmax: f32) -> f32 {
 
 let kMaxRayDistance: f32 = 1e20;
 
+fn iAABB(ro: vec3<f32>, inv_rd: vec3<f32>, aabb_rad: vec3<f32>) -> bool {
+    let n = inv_rd*ro;
+    let k = abs(inv_rd)*aabb_rad;
+    let t1 = -n - k;
+    let t2 = -n + k;
+
+    let tmin = max( max( t1.x, t1.y ), t1.z );
+    let tmax = min( min( t2.x, t2.y ), t2.z );
+	
+    return tmax > max(tmin, 0.);
+}
+
 fn iSphere(ro: vec3<f32>, rd: vec3<f32>, radius: f32) -> f32 {
     let b = dot(rd, ro);
     let c = dot(ro, ro) - (radius * radius);
@@ -423,52 +451,105 @@ struct RayTraceResult {
     shapeIndex: u32,
 }
 
-fn traceRay(ro: vec3<f32>, rd: vec3<f32>, tmax: f32) -> RayTraceResult {
-    var tmin = tmax;
-    var normal = vec3<f32>(.0, .0, .0);
-    var shapeIndex = shapesConfig.numShapes;
-    for (var i = 0u; i < shapesConfig.numShapes; i = i + 1u) {
-        let s = shapesBuffer.shapes[i];
-        if (s.data0[0] == 0u) {
-            let oro = wrap3(ro - s.data1.xyz);
-            let t = iSphere(oro, rd, s.data1.w);
-            if (t < tmin) {
-                tmin = t;
-                normal = nSphere(oro + t * rd);
-                shapeIndex = i;
-            }
-        } else if (s.data0[0] == 1u) {
-            let oro = wrap3(ro - s.data1.xyz);
-            let tnor = iRoundedCone(oro, rd, vec3<f32>(0.), s.data2.xyz- s.data1.xyz, s.data1.w, s.data2.w);
-            if (tnor.x < tmin) {
-                tmin = tnor.x;
-                normal = tnor.yzw;
-                shapeIndex = i;
-            }
+fn traceRayShape(shapeIndex: u32, ro: vec3<f32>, rd: vec3<f32>, result: RayTraceResult) -> RayTraceResult {
+    let s = shapesBuffer.shapes[shapeIndex];
+    if (s.data0[0] == 0u) {
+        let oro = wrap3(ro - s.data1.xyz);
+        let t = iSphere(oro, rd, s.data1.w);
+        if (t > 0. && t < result.t) {
+            return RayTraceResult(t, nSphere(oro + t * rd), shapeIndex);
+        }
+    } else if (s.data0[0] == 1u) {
+        let oro = wrap3(ro - s.data1.xyz);
+        let tnor = iRoundedCone(oro, rd, vec3<f32>(0.), s.data2.xyz- s.data1.xyz, s.data1.w, s.data2.w);
+        if (tnor.x > 0. && tnor.x < result.t) {
+            return RayTraceResult(tnor.x, tnor.yzw, shapeIndex);
         }
     }
-    return RayTraceResult(
-        tmin,
-        normal,
-        shapeIndex,
+    return result;
+} 
+
+fn traceOccShape(shapeIndex: u32, ro: vec3<f32>, rd: vec3<f32>, tmax: f32) -> bool {
+    let s = shapesBuffer.shapes[shapeIndex];
+    if (s.data0[0] == 0u) {
+        let oro = wrap3(ro - s.data1.xyz);
+        let t = iSphere(oro, rd, s.data1.w);
+        if (t > 0. && t < tmax) {
+            return true;
+        }
+    } else if (s.data0[0] == 1u) {
+        let oro = wrap3(ro - s.data1.xyz);
+        let t = iRoundedCone(oro, rd, vec3<f32>(0.), s.data2.xyz- s.data1.xyz, s.data1.w, s.data2.w).x;
+        if (t > 0. && t < tmax) {
+            return true;
+        }
+    }
+    return false;
+} 
+
+fn traceRayBVH(ro: vec3<f32>, rd: vec3<f32>, tmax: f32) -> RayTraceResult {
+    var result = RayTraceResult(
+        tmax,
+        vec3<f32>(.0, .0, .0),
+        shapesConfig.numShapes,
     );
+    var nodeIndex = 0u;
+    let maxLength = shapesConfig.numBvhNodes;
+    let inv_rd = 1.0/rd;
+
+    while (nodeIndex < maxLength) {
+        let node = bvhBuffer.nodes[nodeIndex];
+
+        if (node.entry > maxLength) {
+            result = traceRayShape(node.shape, ro, rd, result);
+            nodeIndex = node.exit;
+        } else if (iAABB(wrap3(ro - node.aabb_pos.xyz), inv_rd, node.aabb_rad.xyz)) {
+            nodeIndex = node.entry;
+        } else {
+            nodeIndex = node.exit;
+        }
+    }
+    return result;
+}
+
+fn traceOccBVH(ro: vec3<f32>, rd: vec3<f32>, tmax: f32) -> f32 {
+    var nodeIndex = 0u;
+    let maxLength = shapesConfig.numBvhNodes;
+    let inv_rd = 1.0/rd;
+
+    while (nodeIndex < maxLength) {
+        let node = bvhBuffer.nodes[nodeIndex];
+
+        if (node.entry > maxLength) {
+            if (traceOccShape(node.shape, ro, rd, tmax)) {
+                return 0.;
+            }
+            nodeIndex = node.exit;
+        } else if (iAABB(wrap3(ro - node.aabb_pos.xyz), inv_rd, node.aabb_rad.xyz)) {
+            nodeIndex = node.entry;
+        } else {
+            nodeIndex = node.exit;
+        }
+    }
+    return 1.;
+}
+
+fn traceRay(ro: vec3<f32>, rd: vec3<f32>, tmax: f32) -> RayTraceResult {
+    var result = RayTraceResult(
+        tmax,
+        vec3<f32>(.0, .0, .0),
+        shapesConfig.numShapes,
+    );
+    for (var i = 0u; i < shapesConfig.numShapes; i = i + 1u) {
+        result = traceRayShape(i, ro, rd, result);
+    }
+    return result;
 }
 
 fn traceOcc(ro: vec3<f32>, rd: vec3<f32>, tmax: f32) -> f32 {
-    for (var i = 0u; i < shapesConfig.numShapes; i = i + 1u) {
-        let s = shapesBuffer.shapes[i];
-        if (s.data0[0] == 0u) {
-            let oro = wrap3(ro - s.data1.xyz);
-            let t = iSphere(oro, rd, s.data1.w);
-            if (t > 0. && t < tmax) {
-                return 0.;
-            }
-        } else if (s.data0[0] == 1u) {
-            let oro = wrap3(ro - s.data1.xyz);
-            let t = iRoundedCone(oro, rd, vec3<f32>(0.), s.data2.xyz- s.data1.xyz, s.data1.w, s.data2.w).x;
-            if (t > 0. && t < tmax) {
-                return 0.;
-            }
+    for (var i = 0u; i < shapesConfig.numShapes; i++) {
+        if (traceOccShape(i, ro, rd, tmax)) {
+            return 0.;
         }
     }
     return 1.;
@@ -519,7 +600,7 @@ fn main_frag_pbr(in: VertexOutput) -> @location(0) vec4<f32> {
     albedo = albedo * patternMask;
 
     if (dist > 0.) {
-        let result = traceRay(RO, RD, RO.z - WorldPos.z);
+        let result = traceRayBVH(RO, RD, RO.z - WorldPos.z);
         if (result.shapeIndex < shapesConfig.numShapes) {
             N = result.normal;
             WorldPos = RO + result.t * RD;
@@ -585,7 +666,7 @@ fn main_frag_pbr(in: VertexOutput) -> @location(0) vec4<f32> {
                 continue;
             }
             if (dist > 0.) {
-                shadow = shadow * traceOcc(WorldPos, wp, tmax);
+                shadow = shadow * traceOccBVH(WorldPos, wp, tmax);
             }
         }
         if (shadow == 0.) {

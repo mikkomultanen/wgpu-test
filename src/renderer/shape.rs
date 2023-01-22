@@ -1,3 +1,4 @@
+use bvh::{aabb::{AABB, Bounded}, bounding_hierarchy::BHShape};
 use cgmath::{Vector3, Point3, EuclideanSpace};
 
 #[repr(C)]
@@ -48,10 +49,8 @@ impl TranslateXYZ for [f32; 4] {
     }
 }
 
-enum Shape {
-    Sphere = 0,
-    RoundedCone = 1,
-}
+const SHAPE_SPHERE: u32 = 0;
+const SHAPE_ROUNDED_CONE: u32 = 1;
 
 impl ShapeData {
     pub fn new() -> Self {
@@ -64,7 +63,7 @@ impl ShapeData {
         position: Point3<f32>, radius: f32,
         color: [f32; 3], metallic: f32, roughness: f32, 
     ) {
-        self.data0[0] = Shape::Sphere as u32;
+        self.data0[0] = SHAPE_SPHERE;
         self.data0[1] = color.to_u32();
         self.data0[2] = u32::from_le_bytes([ecolor::linear_u8_from_linear_f32(metallic), ecolor::linear_u8_from_linear_f32(roughness), 0u8, 0u8]);
         self.data1 = position.to_vec().extend(radius).into();
@@ -75,7 +74,7 @@ impl ShapeData {
         position_b: Point3<f32>, radius_b: f32,
         color: [f32; 3], metallic: f32, roughness: f32, 
     ) {
-        self.data0[0] = Shape::RoundedCone as u32;
+        self.data0[0] = SHAPE_ROUNDED_CONE;
         self.data0[1] = color.to_u32();
         self.data0[2] = u32::from_le_bytes([ecolor::linear_u8_from_linear_f32(metallic), ecolor::linear_u8_from_linear_f32(roughness), 0u8, 0u8]);
         self.data1 = position_a.to_vec().extend(radius_a).into();
@@ -88,16 +87,75 @@ impl ShapeData {
     }
 }
 
+impl Bounded for ShapeData {
+    fn aabb(&self) -> AABB {
+        match self.data0[0] {
+            SHAPE_SPHERE => {
+                let position = bvh::Point3::from_slice(&self.data1[0..3]);
+                let radius = self.data1[3];
+                AABB::with_bounds(position - radius, position + radius)
+            }
+            SHAPE_ROUNDED_CONE => {
+                let position_a = bvh::Point3::from_slice(&self.data1[0..3]);
+                let radius_a = self.data1[3];
+                let position_b= bvh::Point3::from_slice(&self.data2[0..3]);
+                let radius_b = self.data2[3];
+                AABB::with_bounds(
+                    (position_a - radius_a).min(position_b - radius_b),
+                    (position_a + radius_a).max(position_b + radius_b),
+                )
+            }
+            _ => panic!("Not possible!!!")
+        }
+    }
+}
+
+impl BHShape for ShapeData {
+    fn set_bh_node_index(&mut self, index: usize) {
+        self.data0[3] = index as u32;
+    }
+
+    fn bh_node_index(&self) -> usize {
+        self.data0[3] as usize
+    }
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Zeroable, bytemuck::Pod)]
+pub struct ShapeBVHNode {
+    pub aabb_pos: [f32; 4],
+    pub aabb_rad: [f32; 4],
+    pub entry: u32,
+    pub exit: u32,
+    pub shape: u32,
+    pub padding: u32,
+}
+
+impl Default for ShapeBVHNode {
+    fn default() -> Self {
+        Self {
+            aabb_pos: [0.0; 4],
+            aabb_rad: [0.0; 4],
+            entry: 0,
+            exit: 0,
+            shape: 0,
+            padding: 0,
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Zeroable, bytemuck::Pod)]
 pub struct ShapesConfig {
     pub num_shapes: u32,
+    pub num_bvh_nodes: u32,
 }
 
 impl Default for ShapesConfig {
     fn default() -> Self {
         Self {
             num_shapes: 0,
+            num_bvh_nodes: 0,
         }
     }
     
