@@ -231,8 +231,8 @@ impl State {
             self.add_entity_pressed = false;
             let count = renderer::MAX_SHAPES / 11;
             let s = (count as f32 / (WORLD_SIZE.x * WORLD_SIZE.y)).sqrt();
-            let w = 10.;//(s * WORLD_SIZE.x).ceil();
-            let h = 10.;//(s * WORLD_SIZE.y).ceil();
+            let w = (s * WORLD_SIZE.x).ceil();
+            let h = (s * WORLD_SIZE.y).ceil();
             let mut i = 0.;
             let mut j = 0.;
             while i < w {
@@ -241,7 +241,6 @@ impl State {
                     let y = ((j + 0.5) / h - 0.5) * WORLD_SIZE.y;
                     let position = Vector3::new(x, y, -2.);
                     let index = (i * h + j) as u32;
-                    print!("position {index}/{count}: {x}x{y}");
                     self.add_entity(position);
                     j = j + 1.;
                 }
