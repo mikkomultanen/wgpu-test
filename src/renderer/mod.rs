@@ -16,7 +16,7 @@ use crate::renderer::shape::{ShapeBVHNode, ShapeData, ShapesConfig};
 use crate::sdf::SDF;
 
 pub const MAX_LIGHTS: usize = 1024;
-pub const MAX_SHAPES: usize = 1024;
+pub const MAX_SHAPES: usize = 4096;
 const NUM_SUBPIXEL_JITTER_SAMPLES: usize = 16;
 
 fn halton(base: usize, index: usize) -> f32 {
