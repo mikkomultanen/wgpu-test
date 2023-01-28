@@ -624,12 +624,10 @@ impl Renderer {
 
     pub fn update_shapes(&mut self, queue: &mut wgpu::Queue, shapes: &mut Vec<ShapeData>) {
         self.bvh = bvh::bvh::BVH::build(shapes).flatten_custom(&|aabb, entry, exit, shape| ShapeBVHNode {
-            aabb_pos: ((aabb.min + aabb.max) * 0.5).extend(0.).into(),
-            aabb_rad: ((aabb.max - aabb.min) * 0.5).extend(0.).into(),
-            entry,
-            exit,
-            shape,
-            padding: 0,
+            aabb_pos: ((aabb.min + aabb.max) * 0.5).into(),
+            entry: if entry == u32::max_value() { -(shape as i32) } else { entry as i32 },
+            aabb_rad: ((aabb.max - aabb.min) * 0.5).into(),
+            exit: exit as i32,
         });
         queue.write_buffer(&self.bvh_buffer, 0, bytemuck::cast_slice(&self.bvh));
         queue.write_buffer(&self.shapes_buffer, 0, bytemuck::cast_slice(shapes));

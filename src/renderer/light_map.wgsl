@@ -193,12 +193,10 @@ struct ShapesBuffer {
 var<storage, read> shapesBuffer: ShapesBuffer;
 
 struct ShapeBVHNode {
-    aabb_pos: vec4<f32>,
-    aabb_rad: vec4<f32>,
-    entry: u32,
-    exit: u32,
-    shape: u32,
-    padding: u32,
+    aabb_pos: vec3<f32>,
+    entry: i32,
+    aabb_rad: vec3<f32>,
+    exit: i32,
 }
 
 struct ShapeBVHNodesBuffer {
@@ -493,15 +491,15 @@ fn traceRayBVH(ro: vec3<f32>, rd: vec3<f32>, tmax: f32) -> RayTraceResult {
         vec3<f32>(.0, .0, .0),
         shapesConfig.numShapes,
     );
-    var nodeIndex = 0u;
-    let maxLength = shapesConfig.numBvhNodes;
+    var nodeIndex = 0;
+    let maxLength = i32(shapesConfig.numBvhNodes);
     let inv_rd = 1.0/rd;
 
     while (nodeIndex < maxLength) {
         let node = bvhBuffer.nodes[nodeIndex];
 
-        if (node.entry > maxLength) {
-            result = traceRayShape(node.shape, ro, rd, result);
+        if (node.entry < 0) {
+            result = traceRayShape(u32(-node.entry), ro, rd, result);
             nodeIndex = node.exit;
         } else if (iAABB(wrap3(ro - node.aabb_pos.xyz), inv_rd, node.aabb_rad.xyz, result.t)) {
             nodeIndex = node.entry;
@@ -513,15 +511,15 @@ fn traceRayBVH(ro: vec3<f32>, rd: vec3<f32>, tmax: f32) -> RayTraceResult {
 }
 
 fn traceOccBVH(ro: vec3<f32>, rd: vec3<f32>, tmax: f32) -> f32 {
-    var nodeIndex = 0u;
-    let maxLength = shapesConfig.numBvhNodes;
+    var nodeIndex = 0;
+    let maxLength = i32(shapesConfig.numBvhNodes);
     let inv_rd = 1.0/rd;
 
     while (nodeIndex < maxLength) {
         let node = bvhBuffer.nodes[nodeIndex];
 
-        if (node.entry > maxLength) {
-            if (traceOccShape(node.shape, ro, rd, tmax)) {
+        if (node.entry < 0) {
+            if (traceOccShape(u32(-node.entry), ro, rd, tmax)) {
                 return 0.;
             }
             nodeIndex = node.exit;

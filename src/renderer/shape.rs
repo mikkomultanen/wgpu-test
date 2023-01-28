@@ -123,23 +123,19 @@ impl BHShape for ShapeData {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Zeroable, bytemuck::Pod)]
 pub struct ShapeBVHNode {
-    pub aabb_pos: [f32; 4],
-    pub aabb_rad: [f32; 4],
-    pub entry: u32,
-    pub exit: u32,
-    pub shape: u32,
-    pub padding: u32,
+    pub aabb_pos: [f32; 3],
+    pub entry: i32,
+    pub aabb_rad: [f32; 3],
+    pub exit: i32,
 }
 
 impl Default for ShapeBVHNode {
     fn default() -> Self {
         Self {
-            aabb_pos: [0.0; 4],
-            aabb_rad: [0.0; 4],
+            aabb_pos: [0.0; 3],
             entry: 0,
+            aabb_rad: [0.0; 3],
             exit: 0,
-            shape: 0,
-            padding: 0,
         }
     }
 }
