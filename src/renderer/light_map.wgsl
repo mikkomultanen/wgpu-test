@@ -362,16 +362,16 @@ fn traceTerrain(ro: vec2<f32>, rd: vec2<f32>, tmax: f32) -> f32 {
 
 let kMaxRayDistance: f32 = 1e20;
 
-fn iAABB(ro: vec3<f32>, inv_rd: vec3<f32>, aabb_rad: vec3<f32>) -> bool {
+fn iAABB(ro: vec3<f32>, inv_rd: vec3<f32>, aabb_rad: vec3<f32>, tmax: f32) -> bool {
     let n = inv_rd*ro;
     let k = abs(inv_rd)*aabb_rad;
     let t1 = -n - k;
     let t2 = -n + k;
 
-    let tmin = max( max( t1.x, t1.y ), t1.z );
-    let tmax = min( min( t2.x, t2.y ), t2.z );
+    let tnear = max( max( t1.x, t1.y ), t1.z );
+    let tfar = min( min( t2.x, t2.y ), t2.z );
 	
-    return tmax > max(tmin, 0.);
+    return tfar > max(tnear, 0.) && tnear < tmax;
 }
 
 fn iSphere(ro: vec3<f32>, rd: vec3<f32>, radius: f32) -> f32 {
@@ -503,7 +503,7 @@ fn traceRayBVH(ro: vec3<f32>, rd: vec3<f32>, tmax: f32) -> RayTraceResult {
         if (node.entry > maxLength) {
             result = traceRayShape(node.shape, ro, rd, result);
             nodeIndex = node.exit;
-        } else if (iAABB(wrap3(ro - node.aabb_pos.xyz), inv_rd, node.aabb_rad.xyz)) {
+        } else if (iAABB(wrap3(ro - node.aabb_pos.xyz), inv_rd, node.aabb_rad.xyz, result.t)) {
             nodeIndex = node.entry;
         } else {
             nodeIndex = node.exit;
@@ -525,7 +525,7 @@ fn traceOccBVH(ro: vec3<f32>, rd: vec3<f32>, tmax: f32) -> f32 {
                 return 0.;
             }
             nodeIndex = node.exit;
-        } else if (iAABB(wrap3(ro - node.aabb_pos.xyz), inv_rd, node.aabb_rad.xyz)) {
+        } else if (iAABB(wrap3(ro - node.aabb_pos.xyz), inv_rd, node.aabb_rad.xyz, tmax)) {
             nodeIndex = node.entry;
         } else {
             nodeIndex = node.exit;
