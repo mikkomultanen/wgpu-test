@@ -240,7 +240,6 @@ impl State {
                     let x = ((i + 0.5) / w - 0.5) * WORLD_SIZE.x;
                     let y = ((j + 0.5) / h - 0.5) * WORLD_SIZE.y;
                     let position = Vector3::new(x, y, -2.);
-                    let index = (i * h + j) as u32;
                     self.add_entity(position);
                     j = j + 1.;
                 }
