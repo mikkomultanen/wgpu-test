@@ -213,6 +213,15 @@ struct ShapesConfig {
 var<uniform> shapesConfig: ShapesConfig;
 
 @group(4) @binding(0)
+var t_diffuse: texture_2d<f32>;
+
+@group(4) @binding(1)
+var t_normals_metallic_roughness: texture_2d<f32>;
+
+@group(4) @binding(2)
+var t_depth: texture_depth_2d;
+
+@group(5) @binding(0)
 var t_blue_noise: texture_2d<f32>;
 
 fn unpackSdf(v: f32) -> f32 {

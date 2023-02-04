@@ -379,7 +379,7 @@ impl Renderer {
             }
         );
 
-        let light_map_renderer = LightMapRenderer::new(render_resolution, device, queue, &uniform_bind_group_layout, &sdf.sdf_bind_group_layout, &lights_bind_group_layout, &shapes_bind_group_layout);
+        let light_map_renderer = LightMapRenderer::new(render_resolution, device, queue, &uniform_bind_group_layout, &sdf.sdf_bind_group_layout, &lights_bind_group_layout, &shapes_bind_group_layout, &geometry_bind_group_layout);
 
         let lightmap_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: None,
@@ -728,7 +728,7 @@ impl Renderer {
     pub fn render(&mut self, device: &wgpu::Device, queue: &mut wgpu::Queue, encoder: &mut wgpu::CommandEncoder, sdf: &SDF, view: &wgpu::TextureView) {
         queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[self.uniforms]));
         self.geometry_renderer.render(device, encoder, &self.uniform_bind_group, sdf.output_bind_group(), &self.shapes_bind_group);
-        self.light_map_renderer.render(device, queue, encoder, &self.uniform_bind_group, sdf.output_bind_group(), &self.lights_bind_group, &self.shapes_bind_group);
+        self.light_map_renderer.render(device, queue, encoder, &self.uniform_bind_group, sdf.output_bind_group(), &self.lights_bind_group, &self.shapes_bind_group, &self.geometry_bind_group);
         {
             // Denoising and diffuse lighting pass
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
