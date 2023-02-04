@@ -1,3 +1,4 @@
+mod geometry;
 mod light_map;
 pub mod texture;
 mod taa;
@@ -14,6 +15,8 @@ use light_map::LightMapRenderer;
 use crate::renderer::light::{LightData, LightsConfig};
 use crate::renderer::shape::{ShapeBVHNode, ShapeData, ShapesConfig};
 use crate::sdf::SDF;
+
+use self::geometry::GeometryRenderer;
 
 pub const MAX_LIGHTS: usize = 1024;
 pub const MAX_SHAPES: usize = 4096;
@@ -114,6 +117,9 @@ pub struct Renderer {
     bvh_buffer: wgpu::Buffer,
     shapes_config_buffer: wgpu::Buffer,
     shapes_bind_group: wgpu::BindGroup,
+    geometry_renderer: GeometryRenderer,
+    geometry_bind_group_layout: wgpu::BindGroupLayout,
+    geometry_bind_group: wgpu::BindGroup,
     light_map_renderer: LightMapRenderer,
     lightmap_sampler: wgpu::Sampler,    
     lightmap_bind_group_layout: wgpu::BindGroupLayout,
@@ -311,6 +317,67 @@ impl Renderer {
             ],
             label: None,
         });
+
+        let geometry_renderer = GeometryRenderer::new(render_resolution, device, &uniform_bind_group_layout, &sdf.sdf_bind_group_layout, &shapes_bind_group_layout);
+
+        let geometry_bind_group_layout = device.create_bind_group_layout(
+            &wgpu::BindGroupLayoutDescriptor {
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Depth,
+                        },
+                        count: None,
+                    },
+                ],
+                label: Some("geometry_bind_group_layout"),
+            }
+        );
+
+        let geometry_bind_group = device.create_bind_group(
+            &wgpu::BindGroupDescriptor {
+                layout: &geometry_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&geometry_renderer.diffuse.view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(&geometry_renderer.normals_metallic_and_roughness.view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::TextureView(&geometry_renderer.depth.view),
+                    },
+                ],
+                label: Some("geometry_bind_group"),
+            }
+        );
 
         let light_map_renderer = LightMapRenderer::new(render_resolution, device, queue, &uniform_bind_group_layout, &sdf.sdf_bind_group_layout, &lights_bind_group_layout, &shapes_bind_group_layout);
 
@@ -533,6 +600,9 @@ impl Renderer {
             bvh_buffer,
             shapes_config_buffer,
             shapes_bind_group,
+            geometry_renderer,
+            geometry_bind_group_layout,
+            geometry_bind_group,
             light_map_renderer,
             lightmap_sampler,
             lightmap_bind_group_layout,
@@ -555,6 +625,27 @@ impl Renderer {
     }
 
     pub fn resize_render_resolution(&mut self, render_resolution: Vector2<u32>, device: &wgpu::Device) {
+        self.geometry_renderer.resize(render_resolution, device);
+        self.geometry_bind_group = device.create_bind_group(
+            &wgpu::BindGroupDescriptor {
+                layout: &self.geometry_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&self.geometry_renderer.diffuse.view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(&self.geometry_renderer.normals_metallic_and_roughness.view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::TextureView(&self.geometry_renderer.depth.view),
+                    },
+                ],
+                label: Some("geometry_bind_group"),
+            }
+        );
         self.light_map_renderer.resize(render_resolution, device);
         self.lightmap_bind_group = device.create_bind_group(
             &wgpu::BindGroupDescriptor {
@@ -636,6 +727,7 @@ impl Renderer {
 
     pub fn render(&mut self, device: &wgpu::Device, queue: &mut wgpu::Queue, encoder: &mut wgpu::CommandEncoder, sdf: &SDF, view: &wgpu::TextureView) {
         queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[self.uniforms]));
+        self.geometry_renderer.render(device, encoder, &self.uniform_bind_group, sdf.output_bind_group(), &self.shapes_bind_group);
         self.light_map_renderer.render(device, queue, encoder, &self.uniform_bind_group, sdf.output_bind_group(), &self.lights_bind_group, &self.shapes_bind_group);
         {
             // Denoising and diffuse lighting pass

@@ -64,6 +64,15 @@ impl Texture {
         resolution: Vector2<u32>,
         format: wgpu::TextureFormat,
     ) -> Self {
+        return Self::new_intermediate4(device, resolution, format, wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::STORAGE_BINDING);
+    }
+
+    pub fn new_intermediate4(
+        device: &wgpu::Device,
+        resolution: Vector2<u32>,
+        format: wgpu::TextureFormat,
+        usage: wgpu::TextureUsages,
+    ) -> Self {
         let size = wgpu::Extent3d {
             width: resolution.x,
             height: resolution.y,
@@ -76,7 +85,7 @@ impl Texture {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::STORAGE_BINDING,
+            usage: usage,
             label: None,
         });
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
