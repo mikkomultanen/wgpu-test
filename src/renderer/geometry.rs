@@ -22,7 +22,7 @@ impl GeometryRenderer {
         shapes_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
         let diffuse = texture::Texture::new_intermediate(device, resolution, DIFFUSE_FORMAT);
-        let normals_specular_and_roughness = texture::Texture::new_intermediate(
+        let normals_metallic_and_roughness = texture::Texture::new_intermediate(
             device,
             resolution,
             NORMALS_SPECULAR_AND_ROUGHNESS_FORMAT,
@@ -81,21 +81,17 @@ impl GeometryRenderer {
             depth_stencil: Some(wgpu::DepthStencilState {
                 format: DEPTH_FORMAT,
                 depth_write_enabled: true,
-                depth_compare: wgpu::CompareFunction::LessEqual,
+                depth_compare: wgpu::CompareFunction::Always,
                 stencil: wgpu::StencilState::default(),
                 bias: wgpu::DepthBiasState::default(),
             }),
-            multisample: wgpu::MultisampleState {
-                count: 1,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
+            multisample: wgpu::MultisampleState::default(),
             multiview: None,
         });
 
         return Self {
             diffuse,
-            normals_metallic_and_roughness: normals_specular_and_roughness,
+            normals_metallic_and_roughness,
             depth,
             geometry_pipeline,
         };
@@ -154,7 +150,7 @@ impl GeometryRenderer {
                     view: &self.depth.view,
                     depth_ops: Some(wgpu::Operations {
                         load: wgpu::LoadOp::Clear(1.0),
-                        store: false,
+                        store: true,
                     }),
                     stencil_ops: None,
                 }),

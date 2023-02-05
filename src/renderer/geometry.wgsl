@@ -309,7 +309,7 @@ fn main_frag(in: VertexOutput) -> FragmentOutput {
     }
 
     return FragmentOutput(
-        saturate(-0.25 * WorldPos.z),
+        saturate(-0.25 * WorldPos.z + 0.5),
         vec4<f32>(albedo, 1.0),
         vec4<f32>(encode_normal(N), metallic, roughness),
     );
