@@ -219,7 +219,7 @@ var t_diffuse: texture_2d<f32>;
 var t_normals_metallic_roughness: texture_2d<f32>;
 
 @group(4) @binding(2)
-var t_depth: texture_depth_2d;
+var t_depth: texture_2d<f32>;
 
 @group(5) @binding(0)
 var t_blue_noise: texture_2d<f32>;
@@ -579,6 +579,18 @@ fn constructONBfrisvad(normal: vec3<f32>) -> mat3x3<f32> {
     );
 }
 
+fn decode_normal(po: vec2<f32>) -> vec3<f32> {
+    // Convert to [-1..1]
+    let p = po * 2.0 - 1.0;
+    
+    // Decode the octahedron
+    // https://twitter.com/Stubbesaurus/status/937994790553227264
+    var n = vec3<f32>(p.x, p.y, 1.0 - abs(p.x) - abs(p.y));
+    let t = max(0., -n.z);
+    n += vec3<f32>(mix(vec2<f32>(t), vec2<f32>(-t), step(vec2<f32>(0.), n.xy)), 0.);
+    
+    return normalize(n);
+}
 
 @fragment
 fn main_frag_pbr(in: VertexOutput) -> @location(0) vec4<f32> {
@@ -587,37 +599,16 @@ fn main_frag_pbr(in: VertexOutput) -> @location(0) vec4<f32> {
     let dist = sceneDist(in.world_pos);
     let RO = vec3<f32>(in.world_pos, 2.0);
     let RD = vec3<f32>(0., 0., -1.);
-    var N = vec3<f32>(0., 0., 1.);
-    var WorldPos = vec3<f32>(in.world_pos, -2.);
 
-    var albedo: vec3<f32>;
-    var metallic: f32;
-    var roughness: f32;
+    let texel: vec2<i32> = vec2<i32>(floor(in.position.xy));
 
-    if (dist < 0.) {
-        albedo = vec3<f32>(1.0, 0.4, 0.0);
-        metallic = 0.;
-        roughness = 1.;
-    } else {
-        albedo = vec3<f32>(1., 1., 1.);
-        metallic = 1.;
-        roughness = 0.5;
-    }
-    let patternMask = clamp(dot(floor((abs(in.world_pos) + .5) / 1.0), vec2<f32>(1.0)) % 2.0, 0.8, 1.0);
-    albedo = albedo * patternMask;
-
-    if (dist > 0.) {
-        let result = traceRayBVH(RO, RD, RO.z - WorldPos.z);
-        if (result.shapeIndex < shapesConfig.numShapes) {
-            N = result.normal;
-            WorldPos = RO + result.t * RD;
-            let shape = shapesBuffer.shapes[result.shapeIndex];
-            albedo = unpack4x8unorm(shape.data0.y).xyz;
-            let params = unpack4x8unorm(shape.data0.z);
-            metallic = params.x;
-            roughness = params.y;
-        }
-    }
+    let albedo = textureLoad(t_diffuse, texel, 0).xyz;
+    let normals_metallic_roughness = textureLoad(t_normals_metallic_roughness, texel, 0);
+    let metallic = normals_metallic_roughness.z;
+    let roughness = normals_metallic_roughness.w;
+    let N = decode_normal(normals_metallic_roughness.xy);
+    let depth = textureLoad(t_depth, texel, 0).x;
+    let WorldPos = vec3<f32>(in.world_pos, -4. * depth + 2.);
 
     let ao = 1.0;
 
