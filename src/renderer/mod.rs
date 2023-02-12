@@ -268,7 +268,7 @@ impl Renderer {
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                     count: None,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Storage { read_only: true },
@@ -278,7 +278,7 @@ impl Renderer {
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                     count: None,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Storage { read_only: true },
@@ -288,7 +288,7 @@ impl Renderer {
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 2,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                     count: None,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
@@ -725,9 +725,9 @@ impl Renderer {
         queue.write_buffer(&self.shapes_config_buffer, 0, bytemuck::cast_slice(&[ShapesConfig { num_shapes: shapes.len() as u32, num_bvh_nodes: self.bvh.len() as u32 }]));
     }
 
-    pub fn render(&mut self, device: &wgpu::Device, queue: &mut wgpu::Queue, encoder: &mut wgpu::CommandEncoder, sdf: &SDF, view: &wgpu::TextureView) {
+    pub fn render(&mut self, device: &wgpu::Device, queue: &mut wgpu::Queue, encoder: &mut wgpu::CommandEncoder, sdf: &SDF, shapes: &Vec<ShapeData>, view: &wgpu::TextureView) {
         queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[self.uniforms]));
-        self.geometry_renderer.render(device, encoder, &self.uniform_bind_group, sdf.output_bind_group(), &self.shapes_bind_group);
+        self.geometry_renderer.render(device, encoder, &self.uniform_bind_group, sdf.output_bind_group(), &self.shapes_bind_group, shapes);
         self.light_map_renderer.render(device, queue, encoder, &self.uniform_bind_group, sdf.output_bind_group(), &self.lights_bind_group, &self.shapes_bind_group, &self.geometry_bind_group);
         {
             // Denoising and diffuse lighting pass
