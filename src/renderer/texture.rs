@@ -4,7 +4,6 @@ use cgmath::Vector2;
 use image::GenericImageView;
 
 pub struct Texture {
-    pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
     pub size: wgpu::Extent3d
 }
@@ -53,7 +52,6 @@ impl Texture {
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         Self {
-            texture,
             view,
             size,
         }
@@ -91,7 +89,6 @@ impl Texture {
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         Self {
-            texture,
             view,
             size,
         }
