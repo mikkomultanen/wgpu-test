@@ -119,7 +119,7 @@ impl GUI {
             egui::Window::new("Stats")
             .resizable(false)
             .title_bar(false)
-            .anchor(egui::Align2::LEFT_BOTTOM, egui::Vec2::ZERO)
+            .anchor(egui::Align2::LEFT_TOP, egui::Vec2::ZERO)
             .show(&ctx, |ui| {
                 ui.horizontal(|ui| {
                     ui.add(egui::Checkbox::new(&mut self.v_sync, "VSync"));
