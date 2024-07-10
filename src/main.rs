@@ -141,8 +141,8 @@ impl State {
             self.config.height = new_size.height;
             let renderer_scale = self.gui.renderer_scale;
             let render_resolution = Vector2::new(
-                ((new_size.width as f32 * renderer_scale).ceil() as u32).clamp(16, new_size.width),
-                ((new_size.height as f32 * renderer_scale).ceil() as u32).clamp(16, new_size.height),
+                ((new_size.width as f32 * renderer_scale).ceil() as u32).clamp(16, 8192),
+                ((new_size.height as f32 * renderer_scale).ceil() as u32).clamp(16, 8192),
             );
             let output_resolution = Vector2::new(new_size.width, new_size.height);
             self.renderer.resize(render_resolution, output_resolution, &self.device);
@@ -397,11 +397,11 @@ fn main() {
                             },
                         ..
                     } => *control_flow = ControlFlow::Exit,
-                    WindowEvent::Resized(physical_size) => {
-                        state.resize(*physical_size, state.scale_factor);
+                    WindowEvent::Resized(_) => {
+                        state.resize(window.inner_size(), window.scale_factor());
                     }
-                    WindowEvent::ScaleFactorChanged { scale_factor, new_inner_size } => {
-                        state.resize(**new_inner_size, *scale_factor);
+                    WindowEvent::ScaleFactorChanged { scale_factor: _, new_inner_size: _ } => {
+                        state.resize(window.inner_size(), window.scale_factor());
                     }
                     WindowEvent::Focused(new_focused) => {
                         focused = *new_focused;
