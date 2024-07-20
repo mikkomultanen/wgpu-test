@@ -101,7 +101,7 @@ fn wrap3(p: vec3<f32>) -> vec3<f32> {
     return vec3<f32>(wrap(p.xy), p.z);
 }
 
-let kMaxRayDistance: f32 = 1e20;
+const kMaxRayDistance: f32 = 1e20;
 
 fn iSphere(ro: vec3<f32>, rd: vec3<f32>, radius: f32) -> f32 {
     let b = dot(rd, ro);

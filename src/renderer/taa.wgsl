@@ -11,8 +11,8 @@ struct Uniforms {
     exposure: f32,
 };
 
-let flt_taa_anti_sparkle = 0.1; // TODO move to uniforms
-let flt_taa_variance = 0.2; // TODO move to uniforms
+const flt_taa_anti_sparkle = 0.1; // TODO move to uniforms
+const flt_taa_variance = 0.2; // TODO move to uniforms
 
 @group(0) @binding(0)
 var<uniform> uniforms: Uniforms;
@@ -32,12 +32,12 @@ var t_outputTexture: texture_storage_2d<rgba16float, write>;
 var<workgroup> s_color_pq : array<array<vec2<u32>, 19>, 19>;
 var<workgroup> s_motion : array<array<u32, 19>, 19>;
 
-let pq_m1 = 0.1593017578125;
-let pq_m2 = 78.84375;
-let pq_c1 = 0.8359375;
-let pq_c2 = 18.8515625;
-let pq_c3 = 18.6875;
-let pq_C = 1.;//10000.0;
+const pq_m1 = 0.1593017578125;
+const pq_m2 = 78.84375;
+const pq_c1 = 0.8359375;
+const pq_c2 = 18.8515625;
+const pq_c3 = 18.6875;
+const pq_C = 1.;//10000.0;
 
 fn PQDecode(image: vec3<f32>) -> vec3<f32>
 {
@@ -189,8 +189,8 @@ fn main(
     @builtin(workgroup_id) workgroup_id: vec3<u32>, 
     @builtin(local_invocation_index) local_invocation_index: u32
     ) {
-    let input_size = textureDimensions(t_colorTexture);
-    let output_size = textureDimensions(t_outputTexture);
+    let input_size = vec2<i32>(textureDimensions(t_colorTexture));
+    let output_size = vec2<i32>(textureDimensions(t_outputTexture));
 
     let group_base_hires = vec2<i32>(workgroup_id.xy) * 16;
     let group_base_lores = vec2<i32>(hires_to_lores(group_base_hires, input_size, output_size));

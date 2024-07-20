@@ -1,4 +1,5 @@
 use cgmath::Vector2;
+use wgpu::PipelineCompilationOptions;
 
 use super::texture;
 
@@ -17,7 +18,7 @@ pub struct TAA {
 const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 
 impl TAA {
-    pub fn new(resolution: Vector2<u32>, device: &wgpu::Device, _queue: &mut wgpu::Queue, uniform_bind_group_layout: &wgpu::BindGroupLayout, color_bind_group_layout: &wgpu::BindGroupLayout, output_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
+    pub fn new(resolution: Vector2<u32>, device: &wgpu::Device, _queue: &wgpu::Queue, uniform_bind_group_layout: &wgpu::BindGroupLayout, color_bind_group_layout: &wgpu::BindGroupLayout, output_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
         let textures = [
             texture::Texture::new_intermediate(device, resolution, TEXTURE_FORMAT),
             texture::Texture::new_intermediate(device, resolution, TEXTURE_FORMAT),
@@ -104,6 +105,7 @@ impl TAA {
             layout: Some(&taa_pipeline_layout),
             module: &taa_shader,
             entry_point: "main",
+            compilation_options: PipelineCompilationOptions::default(),
         });
 
         Self {
@@ -161,7 +163,7 @@ impl TAA {
         self.output_resolution = resolution;
     }
 
-    pub fn render(&mut self, device: &wgpu::Device, _queue: &mut wgpu::Queue, encoder: &mut wgpu::CommandEncoder, uniform_bind_group: &wgpu::BindGroup, color_bind_group: &wgpu::BindGroup, output_bind_group_layout: &wgpu::BindGroupLayout) {
+    pub fn render(&mut self, device: &wgpu::Device, _queue: &wgpu::Queue, encoder: &mut wgpu::CommandEncoder, uniform_bind_group: &wgpu::BindGroup, color_bind_group: &wgpu::BindGroup, output_bind_group_layout: &wgpu::BindGroupLayout) {
         let taa_bind_group = &mut self.taa_bind_groups[self.history_texture_index];
         self.history_texture_index = (self.history_texture_index + 1) % 2;
         let output_texture_size = self.textures[self.history_texture_index].size;
@@ -174,7 +176,7 @@ impl TAA {
         }
 
         {
-            let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: None });
+            let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: None, timestamp_writes: None, });
             compute_pass.set_pipeline(&self.taa_pipeline);
             compute_pass.set_bind_group(0, uniform_bind_group, &[]);
             compute_pass.set_bind_group(1, color_bind_group, &[]);

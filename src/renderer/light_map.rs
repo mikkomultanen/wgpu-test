@@ -1,4 +1,5 @@
 use cgmath::*;
+use wgpu::PipelineCompilationOptions;
 
 use super::texture;
 
@@ -12,7 +13,7 @@ pub struct LightMapRenderer {
 const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 
 impl LightMapRenderer {
-    pub fn new(resolution: Vector2<u32>, device: &wgpu::Device, queue: &mut wgpu::Queue, uniform_bind_group_layout: &wgpu::BindGroupLayout, sdf_bind_group_layout: &wgpu::BindGroupLayout, lights_bind_group_layout: &wgpu::BindGroupLayout, shapes_bind_group_layout: &wgpu::BindGroupLayout, geometry_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
+    pub fn new(resolution: Vector2<u32>, device: &wgpu::Device, queue: &wgpu::Queue, uniform_bind_group_layout: &wgpu::BindGroupLayout, sdf_bind_group_layout: &wgpu::BindGroupLayout, lights_bind_group_layout: &wgpu::BindGroupLayout, shapes_bind_group_layout: &wgpu::BindGroupLayout, geometry_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
         let blue_noise_bind_group_layout = device.create_bind_group_layout(
             &wgpu::BindGroupLayoutDescriptor {
                 entries: &[
@@ -60,6 +61,7 @@ impl LightMapRenderer {
             format: TEXTURE_FORMAT,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             label: Some("Renderer result"),
+            view_formats: &[],
         });
         let lightmap_view = lightmap_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
@@ -81,11 +83,13 @@ impl LightMapRenderer {
             vertex: wgpu::VertexState {
                 module: &lightmap_shader,
                 entry_point: "main_vert",
+                compilation_options: PipelineCompilationOptions::default(),
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &lightmap_shader,
                 entry_point: "main_frag_pbr",
+                compilation_options: PipelineCompilationOptions::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: TEXTURE_FORMAT,
                     blend: Some(wgpu::BlendState::REPLACE),
@@ -131,11 +135,12 @@ impl LightMapRenderer {
             format: TEXTURE_FORMAT,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             label: Some("Renderer result"),
+            view_formats: &[],
         });
         self.lightmap_view = lightmap_texture.create_view(&wgpu::TextureViewDescriptor::default());
     }
 
-    pub fn render(&mut self, _device: &wgpu::Device, _queue: &mut wgpu::Queue, encoder: &mut wgpu::CommandEncoder, uniform_bind_group: &wgpu::BindGroup, sdf_bind_group: &wgpu::BindGroup, lights_bind_group: &wgpu::BindGroup, shapes_bind_group: &wgpu::BindGroup, geometry_bind_group: &wgpu::BindGroup) {
+    pub fn render(&mut self, _device: &wgpu::Device, _queue: &wgpu::Queue, encoder: &mut wgpu::CommandEncoder, uniform_bind_group: &wgpu::BindGroup, sdf_bind_group: &wgpu::BindGroup, lights_bind_group: &wgpu::BindGroup, shapes_bind_group: &wgpu::BindGroup, geometry_bind_group: &wgpu::BindGroup) {
         self.blue_noise_index = (self.blue_noise_index + 1) % self.blue_noise_textures.len();
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -151,11 +156,13 @@ impl LightMapRenderer {
                                 b: 0.,
                                 a: 1.0,
                             }),
-                            store: true,
+                            store: wgpu::StoreOp::Store,
                         }
                     })
                 ],
                 depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
             render_pass.set_pipeline(&self.lightmap_pipeline);
             render_pass.set_bind_group(0, uniform_bind_group, &[]);

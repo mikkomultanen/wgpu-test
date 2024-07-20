@@ -1,5 +1,5 @@
 use cgmath::*;
-use wgpu::util::DeviceExt;
+use wgpu::{util::DeviceExt, PipelineCompilationOptions};
 
 use crate::renderer::texture;
 
@@ -68,11 +68,13 @@ impl SDF {
                                 b: 0.0,
                                 a: 0.0,
                             }),
-                            store: true,
+                            store: wgpu::StoreOp::Store,
                         }
                     })
                 ],
                 depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });                    
         }
     
@@ -170,11 +172,13 @@ impl SDF {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "main_vert",
+                compilation_options: PipelineCompilationOptions::default(),
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "main_frag",
+                compilation_options: PipelineCompilationOptions::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: TEXTURE_FORMAT,
                     blend: Some(wgpu::BlendState::REPLACE),
@@ -202,11 +206,13 @@ impl SDF {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "main_vert",
+                compilation_options: PipelineCompilationOptions::default(),
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "main_frag_subtract",
+                compilation_options: PipelineCompilationOptions::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: TEXTURE_FORMAT,
                     blend: Some(wgpu::BlendState::REPLACE),
@@ -275,11 +281,13 @@ impl SDF {
                         resolve_target: None,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Load,
-                            store: true,
+                            store: wgpu::StoreOp::Store,
                         }
                     })
                 ],
                 depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
             render_pass.set_pipeline(&self.pipeline);
             render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
@@ -305,11 +313,13 @@ impl SDF {
                         resolve_target: None,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Load,
-                            store: true,
+                            store: wgpu::StoreOp::Store,
                         }
                     })
                 ],
                 depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
             render_pass.set_pipeline(&self.subtract_pipeline);
             render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);

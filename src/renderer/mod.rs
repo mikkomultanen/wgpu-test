@@ -7,6 +7,7 @@ pub mod light;
 pub mod shape;
 
 use cgmath::*;
+use wgpu::PipelineCompilationOptions;
 use std::time::Instant;
 use wgpu::util::DeviceExt;
 
@@ -143,7 +144,7 @@ pub struct Renderer {
 const COLOR_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 
 impl Renderer {
-    pub fn new(render_resolution: Vector2<u32>, output_resolution: Vector2<u32>, world_size: Vector2<f32>, device: &wgpu::Device, queue: &mut wgpu::Queue, sdf: &SDF, surface_format: &wgpu::TextureFormat) -> Self {
+    pub fn new(render_resolution: Vector2<u32>, output_resolution: Vector2<u32>, world_size: Vector2<f32>, device: &wgpu::Device, queue: &wgpu::Queue, sdf: &SDF, surface_format: &wgpu::TextureFormat) -> Self {
         let mut view_size = Vector2::new(world_size.x / 4., world_size.y / 4.);
         view_size.x = view_size.y * output_resolution.x as f32 / output_resolution.y as f32;
 
@@ -452,11 +453,13 @@ impl Renderer {
             vertex: wgpu::VertexState {
                 module: &blit_shader,
                 entry_point: "main_vert",
+                compilation_options: PipelineCompilationOptions::default(),
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &blit_shader,
                 entry_point: "main_frag",
+                compilation_options: PipelineCompilationOptions::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: COLOR_TEXTURE_FORMAT,
                     blend: Some(wgpu::BlendState::REPLACE),
@@ -559,11 +562,13 @@ impl Renderer {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "main_vert",
+                compilation_options: PipelineCompilationOptions::default(),
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "main_frag",
+                compilation_options: PipelineCompilationOptions::default(),
                 targets: &[Some((*surface_format).into())],
             }),
             primitive: wgpu::PrimitiveState {
@@ -708,12 +713,12 @@ impl Renderer {
         self.uniforms.exposure = exposure;
     }
 
-    pub fn update_lights(&mut self, queue: &mut wgpu::Queue, lights: &Vec<LightData>) {
+    pub fn update_lights(&mut self, queue: &wgpu::Queue, lights: &Vec<LightData>) {
         queue.write_buffer(&self.lights_buffer, 0, bytemuck::cast_slice(lights));
         queue.write_buffer(&self.lights_config_buffer, 0, bytemuck::cast_slice(&[LightsConfig { num_lights: lights.len() as u32 }]));
     }
 
-    pub fn update_shapes(&mut self, queue: &mut wgpu::Queue, shapes: &mut Vec<ShapeData>) {
+    pub fn update_shapes(&mut self, queue: &wgpu::Queue, shapes: &mut Vec<ShapeData>) {
         self.bvh = bvh::bvh::BVH::build(shapes).flatten_custom(&|aabb, entry, exit, shape| ShapeBVHNode {
             aabb_pos: ((aabb.min + aabb.max) * 0.5).into(),
             entry: if entry == u32::max_value() { -(shape as i32) } else { entry as i32 },
@@ -725,7 +730,7 @@ impl Renderer {
         queue.write_buffer(&self.shapes_config_buffer, 0, bytemuck::cast_slice(&[ShapesConfig { num_shapes: shapes.len() as u32, num_bvh_nodes: self.bvh.len() as u32 }]));
     }
 
-    pub fn render(&mut self, device: &wgpu::Device, queue: &mut wgpu::Queue, encoder: &mut wgpu::CommandEncoder, sdf: &SDF, shapes: &Vec<ShapeData>, view: &wgpu::TextureView) {
+    pub fn render(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, encoder: &mut wgpu::CommandEncoder, sdf: &SDF, shapes: &Vec<ShapeData>, view: &wgpu::TextureView) {
         queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[self.uniforms]));
         self.geometry_renderer.render(device, encoder, &self.uniform_bind_group, sdf.output_bind_group(), &self.shapes_bind_group, shapes);
         self.light_map_renderer.render(device, queue, encoder, &self.uniform_bind_group, sdf.output_bind_group(), &self.lights_bind_group, &self.shapes_bind_group, &self.geometry_bind_group);
@@ -744,11 +749,13 @@ impl Renderer {
                                 b: 0.,
                                 a: 1.0,
                             }),
-                            store: true,
+                            store: wgpu::StoreOp::Store,
                         }
                     })
                 ],
                 depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
             render_pass.set_pipeline(&self.blit_pipeline);
             render_pass.set_bind_group(0, &self.lightmap_bind_group, &[]);
@@ -774,11 +781,13 @@ impl Renderer {
                                 b: 0.3,
                                 a: 1.0,
                             }),
-                            store: true,
+                            store: wgpu::StoreOp::Store,
                         }
                     })
                 ],
                 depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
@@ -789,7 +798,7 @@ impl Renderer {
         self.subpixel_jitter_index = (self.subpixel_jitter_index + 1) % self.subpixel_jitter_samples.len();
     }
 
-    pub fn update_upsampler(&mut self, device: &wgpu::Device, queue: &mut wgpu::Queue, upsampler: &Upsampler) {
+    pub fn update_upsampler(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, upsampler: &Upsampler) {
         if *upsampler != self.upsampler.upsampler() {
             self.upsampler = match upsampler {
                 Upsampler::TAA => UpsamplerCell::TAA(taa::TAA::new(self.output_resolution, device, queue, &self.uniform_bind_group_layout, &self.color_bind_group_layout, &self.upsampler_output_bind_group_layout)),

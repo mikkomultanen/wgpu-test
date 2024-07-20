@@ -302,12 +302,12 @@ fn perpendicular(v: vec2<f32>) -> vec2<f32> {
 
 fn blue_noise(p: vec2<f32>) -> vec4<f32> {
     let dimensions = textureDimensions(t_blue_noise);
-    let coords = vec2<i32>(p) % dimensions;
+    let coords = vec2<u32>(p) % dimensions;
     return textureLoad(t_blue_noise, coords, 0);
 }
 
-let PI: f32 = 3.14159265359;
-let TwoPI: f32 = 6.28318530718;
+const PI: f32 = 3.14159265359;
+const TwoPI: f32 = 6.28318530718;
 
 fn DistributionGGX(N: vec3<f32>, H: vec3<f32>, roughness: f32, distance: f32, radius: f32) -> f32
 {
@@ -367,7 +367,7 @@ fn traceTerrain(ro: vec2<f32>, rd: vec2<f32>, tmax: f32) -> f32 {
     return t;
 }
 
-let kMaxRayDistance: f32 = 1e20;
+const kMaxRayDistance: f32 = 1e20;
 
 fn iAABB(ro: vec3<f32>, inv_rd: vec3<f32>, aabb_rad: vec3<f32>, tmax: f32) -> bool {
     let n = inv_rd*ro;

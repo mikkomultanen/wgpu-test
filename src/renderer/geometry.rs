@@ -1,4 +1,5 @@
 use cgmath::*;
+use wgpu::PipelineCompilationOptions;
 
 use super::{texture, shape::ShapeData};
 
@@ -51,11 +52,13 @@ impl GeometryRenderer {
             vertex: wgpu::VertexState {
                 module: &terrain_shader,
                 entry_point: "main_vert",
+                compilation_options: PipelineCompilationOptions::default(),
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &terrain_shader,
                 entry_point: "main_frag",
+                compilation_options: PipelineCompilationOptions::default(),
                 targets: &[
                     Some(wgpu::ColorTargetState {
                         format: DIFFUSE_FORMAT,
@@ -110,11 +113,13 @@ impl GeometryRenderer {
             vertex: wgpu::VertexState {
                 module: &shape_shader,
                 entry_point: "main_vert",
+                compilation_options: PipelineCompilationOptions::default(),
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shape_shader,
                 entry_point: "main_frag",
+                compilation_options: PipelineCompilationOptions::default(),
                 targets: &[
                     Some(wgpu::ColorTargetState {
                         format: DIFFUSE_FORMAT,
@@ -190,7 +195,7 @@ impl GeometryRenderer {
                                 b: 0.,
                                 a: 1.0,
                             }),
-                            store: true,
+                            store: wgpu::StoreOp::Store,
                         },
                     }),
                     Some(wgpu::RenderPassColorAttachment {
@@ -203,7 +208,7 @@ impl GeometryRenderer {
                                 b: 0.,
                                 a: 0.,
                             }),
-                            store: true,
+                            store: wgpu::StoreOp::Store,
                         },
                     }),
                 ],
@@ -211,10 +216,12 @@ impl GeometryRenderer {
                     view: &self.depth.view,
                     depth_ops: Some(wgpu::Operations {
                         load: wgpu::LoadOp::Clear(1.0),
-                        store: true,
+                        store: wgpu::StoreOp::Store,
                     }),
                     stencil_ops: None,
                 }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
             render_pass.set_pipeline(&self.terrain_pipeline);
             render_pass.set_bind_group(0, uniform_bind_group, &[]);
