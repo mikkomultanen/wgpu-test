@@ -9,7 +9,7 @@ resolver = "2"
 [dependencies]
 bytemuck = { version = "1.5.1", features = ["derive"] }
 bvh = "0.7.1"
-cgmath = "0.18"
+glam = "0.28"
 ecolor = "0.28"
 egui = "0.28"
 egui-wgpu = { version = "0.28",features = ["winit"] }

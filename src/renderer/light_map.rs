@@ -1,4 +1,4 @@
-use cgmath::*;
+use glam::*;
 use wgpu::PipelineCompilationOptions;
 
 use super::texture;
@@ -13,7 +13,7 @@ pub struct LightMapRenderer {
 const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 
 impl LightMapRenderer {
-    pub fn new(resolution: Vector2<u32>, device: &wgpu::Device, queue: &wgpu::Queue, uniform_bind_group_layout: &wgpu::BindGroupLayout, sdf_bind_group_layout: &wgpu::BindGroupLayout, lights_bind_group_layout: &wgpu::BindGroupLayout, shapes_bind_group_layout: &wgpu::BindGroupLayout, geometry_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
+    pub fn new(resolution: UVec2, device: &wgpu::Device, queue: &wgpu::Queue, uniform_bind_group_layout: &wgpu::BindGroupLayout, sdf_bind_group_layout: &wgpu::BindGroupLayout, lights_bind_group_layout: &wgpu::BindGroupLayout, shapes_bind_group_layout: &wgpu::BindGroupLayout, geometry_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
         let blue_noise_bind_group_layout = device.create_bind_group_layout(
             &wgpu::BindGroupLayoutDescriptor {
                 entries: &[
@@ -122,7 +122,7 @@ impl LightMapRenderer {
         }
     }
 
-    pub fn resize(&mut self, resolution: Vector2<u32>, device: &wgpu::Device) {
+    pub fn resize(&mut self, resolution: UVec2, device: &wgpu::Device) {
         let lightmap_texture = device.create_texture(&wgpu::TextureDescriptor {
             size: wgpu::Extent3d {
                 width: resolution.x,

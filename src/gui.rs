@@ -1,4 +1,4 @@
-use cgmath::Vector2;
+use glam::UVec2;
 use egui::Context;
 
 use std::string::String;
@@ -26,7 +26,7 @@ pub struct GUI {
     shapes_str: String,
 }
 
-fn res_str(render_resolution: Vector2<u32>, output_resolution: Vector2<u32>) -> String {
+fn res_str(render_resolution: UVec2, output_resolution: UVec2) -> String {
     return format!("R: {}x{} O: {}x{}", render_resolution.x, render_resolution.y, output_resolution.x, output_resolution.y);
 }
 
@@ -68,7 +68,7 @@ impl GUI {
         self.shapes_str = format!("SHAPES: {}", num_shapes);
     }
 
-    pub fn update_res(&mut self, render_resolution: Vector2<u32>, output_resolution: Vector2<u32>) {
+    pub fn update_res(&mut self, render_resolution: UVec2, output_resolution: UVec2) {
         self.res_str = res_str(render_resolution, output_resolution);
     }
 

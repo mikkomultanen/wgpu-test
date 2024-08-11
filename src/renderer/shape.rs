@@ -1,5 +1,5 @@
 use bvh::{aabb::{AABB, Bounded}, bounding_hierarchy::BHShape};
-use cgmath::{Vector3, Point3, EuclideanSpace};
+use glam::Vec3;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Zeroable, bytemuck::Pod)]
@@ -60,28 +60,28 @@ impl ShapeData {
     }
 
     pub fn update_sphere(&mut self, 
-        position: Point3<f32>, radius: f32,
+        position: Vec3, radius: f32,
         color: [f32; 3], metallic: f32, roughness: f32, 
     ) {
         self.data0[0] = SHAPE_SPHERE;
         self.data0[1] = color.to_u32();
         self.data0[2] = u32::from_le_bytes([ecolor::linear_u8_from_linear_f32(metallic), ecolor::linear_u8_from_linear_f32(roughness), 0u8, 0u8]);
-        self.data1 = position.to_vec().extend(radius).into();
+        self.data1 = position.extend(radius).into();
     }
 
     pub fn update_rounded_cone(&mut self, 
-        position_a: Point3<f32>, radius_a: f32,
-        position_b: Point3<f32>, radius_b: f32,
+        position_a: Vec3, radius_a: f32,
+        position_b: Vec3, radius_b: f32,
         color: [f32; 3], metallic: f32, roughness: f32, 
     ) {
         self.data0[0] = SHAPE_ROUNDED_CONE;
         self.data0[1] = color.to_u32();
         self.data0[2] = u32::from_le_bytes([ecolor::linear_u8_from_linear_f32(metallic), ecolor::linear_u8_from_linear_f32(roughness), 0u8, 0u8]);
-        self.data1 = position_a.to_vec().extend(radius_a).into();
-        self.data2 = position_b.to_vec().extend(radius_b).into();
+        self.data1 = position_a.extend(radius_a).into();
+        self.data2 = position_b.extend(radius_b).into();
     }
 
-    pub fn translate(&mut self, translate: Vector3<f32>) {
+    pub fn translate(&mut self, translate: Vec3) {
         self.data1.translate(translate.into());
         self.data2.translate(translate.into());
     }

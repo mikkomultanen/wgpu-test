@@ -3,7 +3,7 @@ pub mod sdf;
 mod renderer;
 mod egui_renderer;
 
-use cgmath::*;
+use glam::*;
 use egui_renderer::EguiRenderer;
 use egui_wgpu::ScreenDescriptor;
 use wgpu::{Device, Queue, TextureFormat, TextureView};
@@ -15,8 +15,8 @@ use renderer::light::LightData;
 use renderer::shape::ShapeData;
 
 const WINDOW_SIZE: winit::dpi::LogicalSize<u32> = winit::dpi::LogicalSize::new(1280, 720);
-const WORLD_SIZE: Vector2<f32> = Vector2::new(256.0, 256.0);
-const SDF_SIZE: Vector2<u32> = Vector2::new(1024, 1024);
+const WORLD_SIZE: Vec2 = Vec2::new(256.0, 256.0);
+const SDF_SIZE: UVec2 = UVec2::new(1024, 1024);
 
 struct State {
     size: winit::dpi::PhysicalSize<u32>,
@@ -28,7 +28,7 @@ struct State {
     egui_renderer: EguiRenderer,
     lights: Vec<LightData>,
     shapes: Vec<ShapeData>,
-    mouse_pos: Point2<f32>,
+    mouse_pos: Vec2,
     add_pressed: bool,
     subtract_pressed: bool,
     up_pressed: bool,
@@ -58,11 +58,11 @@ impl State {
         gui.update_shapes(shapes.len());
 
         let renderer_scale = gui.renderer_scale;
-        let render_resolution = Vector2::new(
+        let render_resolution = UVec2::new(
             ((size.width as f32 * renderer_scale).ceil() as u32).clamp(16, size.width),
             ((size.height as f32 * renderer_scale).ceil() as u32).clamp(16, size.height),
         );
-        let output_resolution = Vector2::new(size.width, size.height);
+        let output_resolution = UVec2::new(size.width, size.height);
         let renderer = renderer::Renderer::new(render_resolution, output_resolution, WORLD_SIZE, device, queue, &sdf, &surface_format);
 
         let egui_renderer = EguiRenderer::new(&device, surface_format, None, 1, &window);
@@ -79,7 +79,7 @@ impl State {
             egui_renderer,
             lights,
             shapes,
-            mouse_pos: Point2::origin(),
+            mouse_pos: Vec2::ZERO,
             add_pressed: false,
             subtract_pressed: false,
             up_pressed: false,
@@ -99,11 +99,11 @@ impl State {
             self.size = new_size;
             self.scale_factor = new_scale_factor;
             let renderer_scale = self.gui.renderer_scale;
-            let render_resolution = Vector2::new(
+            let render_resolution = UVec2::new(
                 ((new_size.width as f32 * renderer_scale).ceil() as u32).clamp(16, 8192),
                 ((new_size.height as f32 * renderer_scale).ceil() as u32).clamp(16, 8192),
             );
-            let output_resolution = Vector2::new(new_size.width, new_size.height);
+            let output_resolution = UVec2::new(new_size.width, new_size.height);
             self.renderer.resize(render_resolution, output_resolution, device);
             self.egui_renderer.ppp(self.scale_factor as f32);
             self.gui.update_res(render_resolution, output_resolution);
@@ -120,7 +120,7 @@ impl State {
                 let size = self.size;
                 let normalized_x = position.x as f32 / size.width as f32;
                 let normalized_y = position.y as f32 / size.height as f32;
-                self.mouse_pos = Point2::new(
+                self.mouse_pos = Vec2::new(
                     normalized_x - 0.5,
                     0.5 - normalized_y
                 );
@@ -157,11 +157,11 @@ impl State {
     }
 
     fn update(&mut self, frame_time: f32) {
-        let mut d: Vector2<f32> = Vector2::zero();
-        if self.up_pressed { d += Vector2::unit_y(); }
-        if self.left_pressed { d += -Vector2::unit_x(); }
-        if self.right_pressed { d += Vector2::unit_x(); }
-        if self.down_pressed { d += -Vector2::unit_y(); }
+        let mut d: Vec2 = Vec2::ZERO;
+        if self.up_pressed { d += Vec2::Y; }
+        if self.left_pressed { d += -Vec2::X; }
+        if self.right_pressed { d += Vec2::X; }
+        if self.down_pressed { d += -Vec2::Y; }
         d *= 0.2 * self.renderer.view_size.x * frame_time;
         let mut z = 1.0;
         if self.zoom_in_pressed { z *= 0.5f32.powf(frame_time); }
@@ -197,7 +197,7 @@ impl State {
                 while j < h {
                     let x = ((i + 0.5) / w - 0.5) * WORLD_SIZE.x;
                     let y = ((j + 0.5) / h - 0.5) * WORLD_SIZE.y;
-                    let position = Vector3::new(x, y, -2.);
+                    let position = Vec3::new(x, y, -2.);
                     self.add_entity(position);
                     j = j + 1.;
                 }
@@ -208,7 +208,7 @@ impl State {
         }
     }
 
-    fn add_entity(&mut self, position: Vector3<f32>) {
+    fn add_entity(&mut self, position: Vec3) {
         if self.shapes.len() + 11 <= renderer::MAX_SHAPES {
             let mut parts: Vec<ShapeData> = vec![ShapeData::new(); 11];
             parts[0].update_rounded_cone([0., 0., 0.35].into(), 0.35, [0., 0., 0.6].into(), 0.25, [1., 0.5, 0.], 0., 0.8,);
@@ -230,19 +230,19 @@ impl State {
         }
     } 
 
-    fn mouse_world_pos(&self) -> Point2<f32> {
-        wrap(self.renderer.position + self.mouse_pos.to_vec().mul_element_wise(self.renderer.view_size))
+    fn mouse_world_pos(&self) -> Vec2 {
+        wrap(self.mouse_pos.mul_add(self.renderer.view_size, self.renderer.position))
     }
 
     fn render(&mut self, view: &TextureView, device: &Device, queue: &Queue, window: &Window) {
         let renderer_scale = self.gui.renderer_scale;
         if renderer_scale != self.renderer_scale {
             self.renderer_scale = renderer_scale;
-            let render_resolution = Vector2::new(
+            let render_resolution = UVec2::new(
                 ((self.size.width as f32 * renderer_scale).ceil() as u32).clamp(16, self.size.width),
                 ((self.size.height as f32 * renderer_scale).ceil() as u32).clamp(16, self.size.height),
             );
-            let output_resolution = Vector2::new(self.size.width, self.size.height);
+            let output_resolution = UVec2::new(self.size.width, self.size.height);
             self.renderer.resize_render_resolution(render_resolution, &device);
             self.gui.update_res(render_resolution, output_resolution);
         }
@@ -259,7 +259,7 @@ impl State {
             (self.gui.light_range * 0.5 * WORLD_SIZE.x.min(WORLD_SIZE.y)).max(self.gui.light_radius),
         );
         self.shapes[0].update_sphere(
-            Point3::from_vec(mouse_world_pos.to_vec().extend(-2. + self.gui.shape_radius)),
+            mouse_world_pos.extend(-2. + self.gui.shape_radius),
             self.gui.shape_radius,
             self.gui.shape_color,
             self.gui.shape_metallic,
@@ -306,12 +306,12 @@ impl State {
     }
 }
 
-fn wrap(p: Point2<f32>) -> Point2<f32> {
+fn wrap(p: Vec2) -> Vec2 {
     let sx = (p.x / WORLD_SIZE.x).abs().ceil() + 0.5;
     let x = (p.x + sx * WORLD_SIZE.x) % WORLD_SIZE.x - 0.5 * WORLD_SIZE.x;
     let sy = (p.y / WORLD_SIZE.y).abs().ceil() + 0.5;
     let y = (p.y + sy * WORLD_SIZE.y) % WORLD_SIZE.y - 0.5 * WORLD_SIZE.y;
-    Point2::new(x, y)
+    Vec2::new(x, y)
 }
 
 fn main() {

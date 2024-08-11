@@ -1,10 +1,10 @@
-use cgmath::Vector2;
+use glam::UVec2;
 use wgpu::PipelineCompilationOptions;
 
 use super::texture;
 
 pub struct TAA {
-    output_resolution: Vector2<u32>,
+    output_resolution: UVec2,
     textures: [texture::Texture; 2],
     taa_sampler: wgpu::Sampler,
     taa_bind_group_layout: wgpu::BindGroupLayout,
@@ -18,7 +18,7 @@ pub struct TAA {
 const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 
 impl TAA {
-    pub fn new(resolution: Vector2<u32>, device: &wgpu::Device, _queue: &wgpu::Queue, uniform_bind_group_layout: &wgpu::BindGroupLayout, color_bind_group_layout: &wgpu::BindGroupLayout, output_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
+    pub fn new(resolution: UVec2, device: &wgpu::Device, _queue: &wgpu::Queue, uniform_bind_group_layout: &wgpu::BindGroupLayout, color_bind_group_layout: &wgpu::BindGroupLayout, output_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
         let textures = [
             texture::Texture::new_intermediate(device, resolution, TEXTURE_FORMAT),
             texture::Texture::new_intermediate(device, resolution, TEXTURE_FORMAT),
@@ -159,7 +159,7 @@ impl TAA {
         })
     }
 
-    pub fn resize(&mut self, resolution: Vector2<u32>) {
+    pub fn resize(&mut self, resolution: UVec2) {
         self.output_resolution = resolution;
     }
 

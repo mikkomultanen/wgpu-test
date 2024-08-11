@@ -1,4 +1,4 @@
-use cgmath::*;
+use glam::*;
 use wgpu::{util::DeviceExt, PipelineCompilationOptions};
 
 use crate::renderer::texture;
@@ -40,7 +40,7 @@ pub struct SDF {
 const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R16Float;
 
 impl SDF {
-    pub fn new(size: cgmath::Vector2<u32>, world_size: cgmath::Vector2<f32>, device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
+    pub fn new(size: UVec2, world_size: Vec2, device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
         let textures = [
             texture::Texture::new_intermediate(device, size, TEXTURE_FORMAT),
             texture::Texture::new_intermediate(device, size, TEXTURE_FORMAT),
@@ -51,10 +51,10 @@ impl SDF {
         });
 
         {
-            let l = cgmath::Vector2 {
+            let l = Vec2 {
                 x: size.x as f32,
                 y: size.y as f32,
-            }.magnitude() as f64;
+            }.length() as f64;
             encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
                 color_attachments: &[
@@ -264,7 +264,7 @@ impl SDF {
         })
     }
 
-    pub fn add(&mut self, mouse: Point2<f32>, cursor_size: f32, queue: &wgpu::Queue, encoder: &mut wgpu::CommandEncoder) {
+    pub fn add(&mut self, mouse: Vec2, cursor_size: f32, queue: &wgpu::Queue, encoder: &mut wgpu::CommandEncoder) {
         self.uniforms.world_pos = mouse.into();
         self.uniforms.radius = 0.25 * cursor_size;
         self.uniforms.smoothness = 0.25 * cursor_size;
@@ -296,7 +296,7 @@ impl SDF {
         }
     }
 
-    pub fn subtract(&mut self, mouse: Point2<f32>, cursor_size: f32, queue: &wgpu::Queue, encoder: &mut wgpu::CommandEncoder) {
+    pub fn subtract(&mut self, mouse: Vec2, cursor_size: f32, queue: &wgpu::Queue, encoder: &mut wgpu::CommandEncoder) {
         self.uniforms.world_pos = [mouse.x, mouse.y];
         self.uniforms.radius = 0.25 * cursor_size;
         self.uniforms.smoothness = 0.25 * cursor_size;

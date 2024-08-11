@@ -1,4 +1,4 @@
-use cgmath::*;
+use glam::*;
 use wgpu::PipelineCompilationOptions;
 
 use super::{texture, shape::ShapeData};
@@ -17,7 +17,7 @@ const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth24Plus;
 
 impl GeometryRenderer {
     pub fn new(
-        resolution: Vector2<u32>,
+        resolution: UVec2,
         device: &wgpu::Device,
         uniform_bind_group_layout: &wgpu::BindGroupLayout,
         sdf_bind_group_layout: &wgpu::BindGroupLayout,
@@ -162,7 +162,7 @@ impl GeometryRenderer {
         };
     }
 
-    pub fn resize(&mut self, resolution: Vector2<u32>, device: &wgpu::Device) {
+    pub fn resize(&mut self, resolution: UVec2, device: &wgpu::Device) {
         self.diffuse = texture::Texture::new_intermediate(device, resolution, DIFFUSE_FORMAT);
         self.normals_metallic_and_roughness = texture::Texture::new_intermediate(
             device,

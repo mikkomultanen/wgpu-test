@@ -1,4 +1,4 @@
-use cgmath::Vector2;
+use glam::UVec2;
 use image::GenericImageView;
 
 pub struct Texture {
@@ -58,7 +58,7 @@ impl Texture {
 
     pub fn new_intermediate(
         device: &wgpu::Device,
-        resolution: Vector2<u32>,
+        resolution: UVec2,
         format: wgpu::TextureFormat,
     ) -> Self {
         return Self::new_intermediate4(device, resolution, format, wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::STORAGE_BINDING);
@@ -66,7 +66,7 @@ impl Texture {
 
     pub fn new_intermediate4(
         device: &wgpu::Device,
-        resolution: Vector2<u32>,
+        resolution: UVec2,
         format: wgpu::TextureFormat,
         usage: wgpu::TextureUsages,
     ) -> Self {

@@ -6,7 +6,7 @@ mod blit_sampler;
 pub mod light;
 pub mod shape;
 
-use cgmath::*;
+use glam::*;
 use wgpu::PipelineCompilationOptions;
 use std::time::Instant;
 use wgpu::util::DeviceExt;
@@ -49,7 +49,7 @@ enum UpsamplerCell {
 }
 
 impl UpsamplerCell {
-    pub fn resize(&mut self, resolution: Vector2<u32>) {
+    pub fn resize(&mut self, resolution: UVec2) {
         match self {
             Self::TAA(taa) => taa.resize(resolution),
             Self::BLIT(_) => {},
@@ -135,17 +135,17 @@ pub struct Renderer {
     upsampler: UpsamplerCell,
     render_pipeline: wgpu::RenderPipeline,
     start_time: Instant,
-    render_resolution: Vector2<u32>, 
-    output_resolution: Vector2<u32>,
-    pub position: Point2<f32>,
-    pub view_size: Vector2<f32>,
+    render_resolution: UVec2, 
+    output_resolution: UVec2,
+    pub position: Vec2,
+    pub view_size: Vec2,
 }
 
 const COLOR_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 
 impl Renderer {
-    pub fn new(render_resolution: Vector2<u32>, output_resolution: Vector2<u32>, world_size: Vector2<f32>, device: &wgpu::Device, queue: &wgpu::Queue, sdf: &SDF, surface_format: &wgpu::TextureFormat) -> Self {
-        let mut view_size = Vector2::new(world_size.x / 4., world_size.y / 4.);
+    pub fn new(render_resolution: UVec2, output_resolution: UVec2, world_size: Vec2, device: &wgpu::Device, queue: &wgpu::Queue, sdf: &SDF, surface_format: &wgpu::TextureFormat) -> Self {
+        let mut view_size = Vec2::new(world_size.x / 4., world_size.y / 4.);
         view_size.x = view_size.y * output_resolution.x as f32 / output_resolution.y as f32;
 
         let mut uniforms = Uniforms::default();
@@ -590,7 +590,7 @@ impl Renderer {
         });
 
         let start_time = Instant::now();
-        let position = Point2::new(0., 0.);
+        let position = Vec2::new(0., 0.);
 
         return Self {
             uniforms,
@@ -629,7 +629,7 @@ impl Renderer {
         }
     }
 
-    pub fn resize_render_resolution(&mut self, render_resolution: Vector2<u32>, device: &wgpu::Device) {
+    pub fn resize_render_resolution(&mut self, render_resolution: UVec2, device: &wgpu::Device) {
         self.geometry_renderer.resize(render_resolution, device);
         self.geometry_bind_group = device.create_bind_group(
             &wgpu::BindGroupDescriptor {
@@ -690,7 +690,7 @@ impl Renderer {
         self.render_resolution = render_resolution;
     }
 
-    pub fn resize(&mut self, render_resolution: Vector2<u32>, output_resolution: Vector2<u32>, device: &wgpu::Device) {
+    pub fn resize(&mut self, render_resolution: UVec2, output_resolution: UVec2, device: &wgpu::Device) {
         self.resize_render_resolution(render_resolution, device);
 
         self.upsampler.resize(output_resolution);
@@ -699,7 +699,7 @@ impl Renderer {
         self.view_size.x = self.view_size.y * output_resolution.x as f32 / output_resolution.y as f32;
     }
 
-    pub fn update_uniforms(&mut self, mouse: Point2<f32>, cursor_size: f32, exposure: f32) {
+    pub fn update_uniforms(&mut self, mouse: Vec2, cursor_size: f32, exposure: f32) {
         self.uniforms.translate = [self.position.x, self.position.y];
         self.uniforms.view_size = [self.view_size.x, self.view_size.y];
         self.uniforms.pixel_size = [self.view_size.x / self.render_resolution.x as f32, self.view_size.y / self.render_resolution.y as f32];
